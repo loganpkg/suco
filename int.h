@@ -1,0 +1,19 @@
+/*
+ * Copyright (c) 2025 Logan Ryan McLintock
+ *
+ * Licensed under the Microsoft Reciprocal License (MS-RL) (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License in the LICENSE file or at
+ *
+ *     https://opensource.org/license/ms-rl-html
+ */
+
+#ifndef INT_H
+#define INT_H
+
+#include <stddef.h>
+
+/* Function declarations */
+int mult_overflow(size_t a, size_t b);
+
+#endif
