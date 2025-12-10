@@ -18,20 +18,27 @@
  * under the License.
  */
 
-#ifndef BUF_H
-#define BUF_H
+#ifndef DEBUG_H
+#define DEBUG_H
 
-#include <stddef.h>
+/* Define on the command line. */
+#ifdef DEBUG
 
-typedef struct buf *Buf;
+#define debug(code) do { \
+    fprintf(stderr, "%s:%d: %s\n", __FILE__, __LINE__, #code); \
+    code; \
+} while (0)
+
+#else
+
+#define debug(code) do { \
+    code; \
+} while (0)
+
+#endif
+
+extern int dummy;
 
 /* Function declarations */
-Buf init_buf(size_t init_num_elements, size_t element_size);
-
-void free_buf(Buf b);
-
-int push(Buf b, void *object);
-
-int pop(Buf b, void *result);
 
 #endif
