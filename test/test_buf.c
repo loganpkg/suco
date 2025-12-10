@@ -26,89 +26,54 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#include <stdlib.h>
-#include <string.h>
+#include <stdio.h>
 
-#include "buf.h"
-#include "int.h"
+#include "../buf.h"
 
-struct buf {
-    void *a;                    /* Memory. */
-    size_t i;                   /* Index of next unused element. */
-    size_t n;                   /* Number of elements allocated. */
-    size_t es;                  /* Element size. */
-};
-
-Buf init_buf(size_t init_num_elements, size_t element_size)
+int main(void)
 {
     Buf b;
+    char str[10];
 
-    if (!init_num_elements || !element_size)
-        return NULL;
-
-    if ((b = calloc(1, sizeof(struct buf))) == NULL)
-        return NULL;
-
-    b->a = NULL;                /* Do not assume that NULL is zero. */
-
-    if (mult_overflow(init_num_elements, element_size)) {
-        free(b);
-        return NULL;
-    }
-
-    if ((b->a = calloc(init_num_elements, element_size)) == NULL) {
-        free(b);
-        return NULL;
-    }
-
-    b->n = init_num_elements;
-    b->es = element_size;
-
-    return b;
-}
-
-void free_buf(Buf b)
-{
-    if (b != NULL) {
-        free(b->a);
-        free(b);
-    }
-}
-
-int push(Buf b, void *object)
-{
-    /* Assumes object is of size b->es. */
-    size_t new_n;
-    void *t;
-
-    if (b->i == b->n) {
-        /* Need to grow the buffer. */
-        if (mult_overflow(b->n, 2))
-            return 1;
-
-        new_n = b->n * 2;
-
-        if (mult_overflow(new_n, b->es))
-            return 1;
-
-        if ((t = realloc(b->a, new_n * b->es)) == NULL)
-            return 1;
-
-        b->a = t;
-        b->n = new_n;
-    }
-
-    memmove((char *) b->a + b->i++ * b->es, object, b->es);
-
-    return 0;
-}
-
-int pop(Buf b, void *result)
-{
-    if (!b->i)
+    if ((b = init_buf(1, 10)) == NULL)
         return 1;
 
-    memmove(result, (char *) b->a + --b->i * b->es, b->es);
+    if (push(b, "cool")) {
+        free_buf(b);
+        return 1;
+    }
 
+    if (push(b, "elephant!")) {
+        free_buf(b);
+        return 1;
+    }
+
+    if (push(b, "whale")) {
+        free_buf(b);
+        return 1;
+    }
+
+    if (pop(b, str)) {
+        free_buf(b);
+        return 1;
+    }
+
+    printf("%s\n", str);
+
+    if (pop(b, str)) {
+        free_buf(b);
+        return 1;
+    }
+
+    printf("%s\n", str);
+
+    if (pop(b, str)) {
+        free_buf(b);
+        return 1;
+    }
+
+    printf("%s\n", str);
+
+    free_buf(b);
     return 0;
 }

@@ -35,8 +35,11 @@ typedef struct buf *Buf;
 
 /* Function declarations */
 Buf init_buf(size_t init_num_elements, size_t element_size);
+
 void free_buf(Buf b);
+
 int push(Buf b, void *object);
+
 int pop(Buf b, void *result);
 
 #endif
