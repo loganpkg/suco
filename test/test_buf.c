@@ -10,7 +10,7 @@
 
 #include <stdio.h>
 
-#include "buf.h"
+#include "../buf.h"
 
 int main(void)
 {

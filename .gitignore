@@ -1,1 +1,4 @@
-test_buf
+*.o
+*.obj
+*.exe
+test_*

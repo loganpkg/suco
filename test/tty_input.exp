@@ -1,0 +1,49 @@
+#! /usr/bin/expect
+
+#
+# Copyright (c) 2025 Logan Ryan McLintock
+#
+# Licensed under the Microsoft Reciprocal License (MS-RL) (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License in the LICENSE file or at
+#
+#     https://opensource.org/license/ms-rl-html
+#
+
+spawn ./test_input
+expect "=> "
+# Starts off quickly.
+send "A\x1B\x5B\x32\x7En"
+# n enters non-blocking, cooked mode.
+expect "=> _"
+send "\x1B\x5B\x32\x7E"
+expect "=> 107"
+expect "=> _"
+send "\x1B\x5B\x36\x7E"
+expect "=> 10A"
+expect "=> _"
+send "d"
+# d enters non-blocking, double-cooked mode.
+expect "=> 64"
+expect "=> _"
+send "\x01\x02\x03\x04\x05\x06"
+expect "=> 300"
+expect "=> _"
+# Deliberately one less character.
+send "\x01\x02\x03\x04\x05"
+expect "=> 01"
+expect "=> 02"
+expect "=> 03"
+expect "=> 04"
+expect "=> 05"
+expect "=> _"
+send "\x1Bx"
+expect "=> 301"
+expect "=> _"
+send "\x1B\x4F\x50\x1B\x4F\x51\x1B\x5B\x32\x34\x7E\x1B\x5B\x33\x7E"
+    send "\x1B\x5B\x35\x7E"
+expect "=> 302"
+expect "=> _"
+send "q"
+expect "=> 71"
+expect eof
