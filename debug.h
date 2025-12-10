@@ -23,54 +23,27 @@
  * SUCH DAMAGE.
  */
 
-#include <stdio.h>
+#ifndef DEBUG_H
+#define DEBUG_H
 
-#include "buf.h"
+/* Define on the command line. */
+#ifdef DEBUG
 
-int main(void)
-{
-    Buf b;
-    char str[10];
+#define debug(code) do { \
+    fprintf(stderr, "%s:%d: %s\n", __FILE__, __LINE__, #code); \
+    code; \
+} while (0)
 
-    if ((b = init_buf(1, 10)) == NULL)
-        return 1;
+#else
 
-    if (push(b, "cool")) {
-        free_buf(b);
-        return 1;
-    }
+#define debug(code) do { \
+    code; \
+} while (0)
 
-    if (push(b, "elephant!")) {
-        free_buf(b);
-        return 1;
-    }
+#endif
 
-    if (push(b, "whale")) {
-        free_buf(b);
-        return 1;
-    }
+extern int dummy;
 
-    if (pop(b, str)) {
-        free_buf(b);
-        return 1;
-    }
+/* Function declarations */
 
-    printf("%s\n", str);
-
-    if (pop(b, str)) {
-        free_buf(b);
-        return 1;
-    }
-
-    printf("%s\n", str);
-
-    if (pop(b, str)) {
-        free_buf(b);
-        return 1;
-    }
-
-    printf("%s\n", str);
-
-    free_buf(b);
-    return 0;
-}
+#endif

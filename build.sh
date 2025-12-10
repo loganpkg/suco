@@ -29,9 +29,16 @@ set -e
 set -u
 set -x
 
-c_ops='-ansi -g -O0 -Wall -Wextra -pedantic'
-indent_ops='-kr -nut -l80 -T Buf'
+c_ops='-ansi -g -O0 -Wall -Wextra -pedantic -DDEBUG'
 
+typedefs=$(grep -r --exclude-dir='.git' -E typedef \
+    | grep -E -o '[a-zA-Z_]+;$' \
+    | sed -E 's/(.*);/-T \1/' \
+    | tr '\n' ' ' \
+    | sed -E 's/ +$//')
+
+indent_ops='-kr -nut -l80 '"$typedefs"
+export indent_ops
 
 build_c() {
     # shellcheck disable=SC2086
@@ -62,6 +69,11 @@ find . -type f -name '*.h' -exec sh -c '
         set -u
         set -x
         fn="$1"
+        c_fn=$(printf %s "$fn" | sed -E "s/\.h$/.c/")
+        if [ ! -s "$c_fn" ]
+        then
+            exit 0
+        fi
         line_num=$(grep -n -E "Function declarations" "$fn" | cut -d ":" -f 1)
         if [ -z "$line_num" ]
         then
@@ -71,9 +83,14 @@ find . -type f -name '*.h' -exec sh -c '
            exit 1
         fi
         head -n "$line_num" "$fn" > "$fn"~
-        c_fn=$(printf %s "$fn" | sed -E "s/\.h$/.c/")
+        # shellcheck disable=SC2086
+        indent $indent_ops "$c_fn"
         {
-            grep -E "^[a-zA-Z][^}{]+$" "$c_fn" | sed -E "s/$/;/"
+            grep -E -v -e "^(static |typedef )" -e ":" "$c_fn" \
+                | tr -d "~" | tr "\n" "~" \
+                | grep -E -o "~[a-zA-Z_][^}{]+\)~" | tr -d "\n" \
+                | sed -E "s/^~//" | tr "~" "\n" | sed -E "s/\)$/);/"
+
             printf "\n%s\n" "#endif"
         } >> "$fn"~
         mv "$fn"~ "$fn"
@@ -88,8 +105,17 @@ fi
 build_c
 
 # shellcheck disable=SC2086
-find . -type f \( -name '*.h' -o -name '*.c' \) \
-    -exec indent $indent_ops '{}' \;
+find . -type f \( -name '*.h' -o -name '*.c' \) -exec sh -c '
+    set -e
+    set -u
+    set -x
+    fn="$1"
+    # shellcheck disable=SC2086
+    indent $indent_ops "$fn"
+    ' sh '{}' \;
+
+# Clean up.
+find . -type f -name '*~' -delete
 
 # Check for long lines.
 if grep -r -I --exclude-dir='.git' -E '.{80}'
@@ -105,11 +131,15 @@ find . -type f \( -name '*.h' -o -name '*.c' \) -exec sh -c '
         set -e
         set -u
         set -x
-        fn=$(basename "$1")
+        fn="$1"
         mv "$fn" "$wd/$fn"
     ' sh '{}' \;
 
 # shellcheck disable=SC2086
-cc $c_ops test_buf.o buf.o int.o -o test_buf
-valgrind ./test_buf
-mv test_buf "$wd"/test_buf
+cc $c_ops test_buf.o buf.o int.o -o test/test_buf
+# shellcheck disable=SC2086
+cc $c_ops test_input.o input.o buf.o int.o -o test/test_input
+valgrind ./test/test_buf
+# valgrind ./test/test_input
+mv ./test/test_buf "$wd"/test/test_buf
+mv ./test/test_input "$wd"/test/test_input

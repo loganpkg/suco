@@ -23,20 +23,54 @@
  * SUCH DAMAGE.
  */
 
-#ifndef BUF_H
-#define BUF_H
+#include <stdio.h>
 
-#include <stddef.h>
+#include "../buf.h"
 
-typedef struct buf *Buf;
+int main(void)
+{
+    Buf b;
+    char str[10];
 
-/* Function declarations */
-Buf init_buf(size_t init_num_elements, size_t element_size);
+    if ((b = init_buf(1, 10)) == NULL)
+        return 1;
 
-void free_buf(Buf b);
+    if (push(b, "cool")) {
+        free_buf(b);
+        return 1;
+    }
 
-int push(Buf b, void *object);
+    if (push(b, "elephant!")) {
+        free_buf(b);
+        return 1;
+    }
 
-int pop(Buf b, void *result);
+    if (push(b, "whale")) {
+        free_buf(b);
+        return 1;
+    }
 
-#endif
+    if (pop(b, str)) {
+        free_buf(b);
+        return 1;
+    }
+
+    printf("%s\n", str);
+
+    if (pop(b, str)) {
+        free_buf(b);
+        return 1;
+    }
+
+    printf("%s\n", str);
+
+    if (pop(b, str)) {
+        free_buf(b);
+        return 1;
+    }
+
+    printf("%s\n", str);
+
+    free_buf(b);
+    return 0;
+}

@@ -38,28 +38,30 @@ struct buf {
 
 Buf init_buf(size_t init_num_elements, size_t element_size)
 {
-    Buf t;
+    Buf b;
 
     if (!init_num_elements || !element_size)
         return NULL;
 
-    if ((t = calloc(1, sizeof(struct buf))) == NULL)
+    if ((b = calloc(1, sizeof(struct buf))) == NULL)
         return NULL;
+
+    b->a = NULL;                /* Do not assume that NULL is zero. */
 
     if (mult_overflow(init_num_elements, element_size)) {
-        free(t);
+        free(b);
         return NULL;
     }
 
-    if ((t->a = calloc(init_num_elements, element_size)) == NULL) {
-        free(t);
+    if ((b->a = calloc(init_num_elements, element_size)) == NULL) {
+        free(b);
         return NULL;
     }
 
-    t->n = init_num_elements;
-    t->es = element_size;
+    b->n = init_num_elements;
+    b->es = element_size;
 
-    return t;
+    return b;
 }
 
 void free_buf(Buf b)
