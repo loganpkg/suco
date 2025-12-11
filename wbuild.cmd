@@ -30,4 +30,7 @@ cl /Wall /DDEBUG test_buf.obj buf.obj int.obj /Fe.\test\test_buf.exe
 cl /Wall /DDEBUG test_input.obj input.obj buf.obj int.obj ^
     /Fe.\test\test_input.exe
 
+cl /Wall /DDEBUG test_screen.obj screen.obj int.obj ^
+    /Fe.\test\test_screen.exe
+
 del *.obj

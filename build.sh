@@ -139,7 +139,10 @@ find . -type f \( -name '*.h' -o -name '*.c' \) -exec sh -c '
 cc $c_ops test_buf.o buf.o int.o -o test/test_buf
 # shellcheck disable=SC2086
 cc $c_ops test_input.o input.o buf.o int.o -o test/test_input
+# shellcheck disable=SC2086
+cc $c_ops test_screen.o screen.o int.o -o test/test_screen
 valgrind ./test/test_buf
 # valgrind ./test/test_input
 mv ./test/test_buf "$wd"/test/test_buf
 mv ./test/test_input "$wd"/test/test_input
+mv ./test/test_screen "$wd"/test/test_screen

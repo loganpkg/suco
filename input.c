@@ -42,15 +42,11 @@
 #include <stdlib.h>
 #include <errno.h>
 
+#include "alias.h"
 #include "buf.h"
 #include "debug.h"
 #include "input.h"
 
-
-#ifdef _WIN32
-#define fileno _fileno
-#define isatty _isatty
-#endif
 
 #define INIT_BUF_ELEMENTS 512
 
