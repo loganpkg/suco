@@ -43,12 +43,24 @@ int free_screen(Screen sc);
 
 Screen init_screen(void);
 
-void get_screen_height(Screen sc, size_t *height);
-
-void get_screen_width(Screen sc, size_t *width);
-
 int print_ch(Screen sc, char ch);
 
+int print_str(Screen sc, const char *str);
+
 int refresh_screen(Screen sc);
+
+int move(Screen sc, size_t y, size_t x);
+
+size_t get_screen_height(Screen sc);
+
+size_t get_screen_width(Screen sc);
+
+size_t get_y(Screen sc);
+
+size_t get_x(Screen sc);
+
+void highlight_on(Screen sc);
+
+void highlight_off(Screen sc);
 
 #endif

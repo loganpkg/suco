@@ -35,6 +35,7 @@
 #endif
 
 
+#include <ctype.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -45,18 +46,33 @@
 #include "screen.h"
 
 
+#define TAB_SIZE 8
+
+
 /* ANSI escape sequences: */
 #define es_clear()        printf("\x1B[2J")
 #define es_reset()        printf("\x1B[0m")
 #define es_reverse_on()   printf("\x1B[7m")
 #define es_reverse_off()  printf("\x1B[27m")
 #define es_blinking_off() printf("\x1B[25m")
-#define es_hide_cursor()  printf("\x1B[25l")
-#define es_show_cursor()  printf("\x1B[25h")
+#define es_hide_cursor()  printf("\x1B[?25l")
+#define es_show_cursor()  printf("\x1B[?25h")
 
 /* y and x start from 0. */
 #define es_move(y, x)     printf("\x1B[%lu;%luH", \
     (size_t) (y) + 1, (size_t) (x) + 1)
+
+
+/*
+ * Advances coordinates by one, wrapping if need.
+ * x is evaluated more than once.
+ */
+#define advance(y, x) do {  \
+    if (++(x) == sc->w) {   \
+        ++(y);              \
+        (x) = 0;            \
+    }                       \
+} while (0)
 
 
 struct screen {
@@ -66,6 +82,7 @@ struct screen {
     size_t area;                /* Screen area. */
     size_t y;                   /* Vertical coordinate (starts at 0). */
     size_t x;                   /* Horizontal coordinate (starts at 0). */
+    int highlight;              /* Indicates if highlight mode is on. */
 #ifdef _WIN32
     HANDLE console_handle;
     int mode_backup;            /* Indicates if mode_orig has been saved. */
@@ -135,10 +152,13 @@ int clear_screen(Screen sc, int mode)
     sc->area = area;
 
     if (mode == HARD_CLEAR) {
-        es_clear();
         es_reset();
         es_blinking_off();
-        es_hide_cursor();
+        es_clear();
+        es_move(0, 0);
+
+        if (fflush(stdout))
+            debug(return 1);
 
         memset(sc->current_mem, ' ', sc->area);
     }
@@ -201,10 +221,7 @@ Screen init_screen(void)
     sc->mode_backup = 1;
 
     /* Set ANSI mode. */
-    mode |=
-        ENABLE_PROCESSED_OUTPUT | ENABLE_VIRTUAL_TERMINAL_PROCESSING |
-        DISABLE_NEWLINE_AUTO_RETURN;
-    mode &= ~(ENABLE_WRAP_AT_EOL_OUTPUT | ENABLE_LVB_GRID_WORLDWIDE);
+    mode |= ENABLE_PROCESSED_OUTPUT | ENABLE_VIRTUAL_TERMINAL_PROCESSING;
 
     if (!SetConsoleMode(sc->console_handle, mode))
         debug(goto error);
@@ -222,34 +239,61 @@ Screen init_screen(void)
 }
 
 
-void get_screen_height(Screen sc, size_t *height)
-{
-    *height = sc->h;
-}
-
-
-void get_screen_width(Screen sc, size_t *width)
-{
-    *width = sc->w;
-}
-
-
 int print_ch(Screen sc, char ch)
 {
-    size_t i;
+    size_t i, j, y_old;
 
     i = sc->y * sc->w + sc->x;
     if (i == sc->area)
         debug(return 1);        /* Off screen. */
 
-    sc->next_mem[i] = ch;
+    if (isprint(ch)) {
+        /*
+         * As only printable chars are added to the memory,
+         * bit 7 is used as a highlight indicator.
+         */
+        if (sc->highlight)
+            ch |= 1 << 7;
 
-    ++sc->x;
-    if (sc->x == sc->w) {
-        /* Line wrap. */
-        ++sc->y;
-        sc->x = 0;
+        sc->next_mem[i] = ch;
+        advance(sc->y, sc->x);
+    } else if (ch == '\t') {
+        j = TAB_SIZE;
+        while (j--)
+            if (print_ch(sc, ' '))
+                debug(return 1);
+    } else if (ch == '\n') {
+        /* Clear to the end of the line. */
+        y_old = sc->y;
+        while (sc->y == y_old)
+            if (print_ch(sc, ' '))
+                debug(return 1);
+    } else if (iscntrl(ch)) {
+        if (print_ch(sc, '^'))
+            debug(return 1);
+
+        /* Toggle bit 6 (the lowest bit is bit 0). */
+        if (print_ch(sc, ch ^ 1 << 6))
+            debug(return 1);
+    } else {
+        if (print_ch(sc, '?'))
+            debug(return 1);
     }
+
+    return 0;
+}
+
+
+int print_str(Screen sc, const char *str)
+{
+    const char *p;
+    char ch;
+
+    p = str;
+    while ((ch = *p++))
+        if (print_ch(sc, ch))
+            debug(return 1);
+
     return 0;
 }
 
@@ -257,16 +301,23 @@ int print_ch(Screen sc, char ch)
 int refresh_screen(Screen sc)
 {
     size_t y, x;                /* In memory. */
+    size_t i;
     size_t s_y, s_x;            /* On displayed screen. */
+    int s_rev = 0;              /* Displayed screen reverse setting is off. */
     unsigned char u;
-    unsigned char *t;
 
     es_hide_cursor();
     for (y = 0; y < sc->h; ++y)
-        for (x = 0; x < sc->w; ++x)
-            if ((u =
-                 sc->next_mem[y * sc->w + x]) !=
-                sc->current_mem[y * sc->w + x]) {
+        for (x = 0; x < sc->w; ++x) {
+            i = y * sc->w + x;
+
+            if ((u = sc->next_mem[i]) != sc->current_mem[i]) {
+                /*
+                 * Make both memory the same. This is better than switching
+                 * memory, as it allows for consecutive refreshes without
+                 * clearing in between.
+                 */
+                sc->current_mem[i] = u;
 
                 /* Optimisation to avoid unneeded moves. */
                 if (y != s_y || x != s_x) {
@@ -275,28 +326,89 @@ int refresh_screen(Screen sc)
                     s_x = x;
                 }
 
-                putchar(u);     /* Advances the cursor on the display. */
-                /* Track the displayed cursor's location. */
-                ++s_x;
-                if (s_x == sc->w) {
-                    /* Wrap. */
-                    ++s_y;
-                    s_x = 0;
+                if (u & 1 << 7) {
+                    /* Highlight. */
+                    /* Clear bit 7 for printing on display. */
+                    u &= ~(1 << 7);
+                    if (!s_rev) {
+                        /* Off, so turn on. */
+                        es_reverse_on();
+                        s_rev = 1;
+                    }
+                } else {
+                    /* No highlight. */
+                    if (s_rev) {
+                        /* On, so turn off. */
+                        es_reverse_off();
+                        s_rev = 0;
+                    }
                 }
+
+                /* Automatically advances the cursor on the display. */
+                putchar(u);
+                /* Track the displayed cursor's location. */
+                advance(s_y, s_x);
             }
+        }
 
     /* Set the final displayed cursor location. */
     if (sc->y != s_y || sc->x != s_x)
         es_move(sc->y, sc->x);
 
+    /* Leave the reverse mode of the displayed screen off. */
+    if (s_rev)
+        es_reverse_off();
+
     es_show_cursor();
     if (fflush(stdout))
-        return 1;
-
-    /* Switch memory. */
-    t = sc->current_mem;
-    sc->current_mem = sc->next_mem;
-    sc->next_mem = t;
+        debug(return 1);
 
     return 0;
+}
+
+
+int move(Screen sc, size_t y, size_t x)
+{
+    if (y >= sc->h || x >= sc->w)
+        debug(return 1);        /* Out of bounds. */
+
+    sc->y = y;
+    sc->x = x;
+    return 0;
+}
+
+
+size_t get_screen_height(Screen sc)
+{
+    return sc->h;
+}
+
+
+size_t get_screen_width(Screen sc)
+{
+    return sc->w;
+}
+
+
+size_t get_y(Screen sc)
+{
+    return sc->y;
+}
+
+
+size_t get_x(Screen sc)
+{
+    return sc->x;
+}
+
+
+void highlight_on(Screen sc)
+{
+    sc->highlight = 1;
+}
+
+
+void highlight_off(Screen sc)
+{
+    sc->highlight = 0;
 }
