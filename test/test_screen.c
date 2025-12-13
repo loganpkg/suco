@@ -23,52 +23,94 @@
  * SUCH DAMAGE.
  */
 
+#ifdef _WIN32
+#include <Windows.h>
+#else
+#include <unistd.h>
+#endif
+
 #include <stdio.h>
 
-#include "../buf.h"
+#include "../alias.h"
 #include "../debug.h"
+#include "../screen.h"
+
+#define ALPHABET_SIZE 26
 
 
-#define INIT_NUM_ELEMENTS 1
-#define ELEMENT_SIZE 10
+int print_alphabet(Screen sc, int mode, int increment)
+{
+    unsigned char u;
+    size_t i, j;
+
+    u = 'A';
+    for (i = 0; i < ALPHABET_SIZE; ++i) {
+        if (clear_screen(sc, mode))
+            debug(return 1);
+
+        for (j = 0; j <= i; j++)
+            print_ch(sc, u);
+
+        if (refresh_screen(sc))
+            debug(return 1);
+
+        if (increment)
+            ++u;
+
+        sleep(1);
+    }
+    return 0;
+}
 
 
 int main(void)
 {
-    Buf b = NULL;
-    char str[ELEMENT_SIZE];
+    Screen sc;
 
-    if ((b = init_buf(INIT_NUM_ELEMENTS, ELEMENT_SIZE)) == NULL)
+    if ((sc = init_screen()) == NULL)
+        debug(return 1);
+
+    sleep(2);
+
+    if (print_alphabet(sc, HARD_CLEAR, 0))
         debug(goto error);
 
-    if (push(b, "cool"))
+    if (print_alphabet(sc, SOFT_CLEAR, 0))
         debug(goto error);
 
-    if (push(b, "elephant!"))
+    if (print_alphabet(sc, HARD_CLEAR, 1))
         debug(goto error);
 
-    if (push(b, "whale"))
+    if (print_alphabet(sc, SOFT_CLEAR, 1))
         debug(goto error);
 
-    if (pop(b, str))
+    highlight_on(sc);
+
+    if (print_str(sc, "cool world\n"))
         debug(goto error);
 
-    printf("%s\n", str);
+    highlight_off(sc);
 
-    if (pop(b, str))
+    if (print_str(sc, "\x01\x1B\n"))
         debug(goto error);
 
-    printf("%s\n", str);
-
-    if (pop(b, str))
+    if (move(sc, 0, 4))
         debug(goto error);
 
-    printf("%s\n", str);
+    if (refresh_screen(sc))
+        debug(goto error);
 
-    free_buf(b);
-    return 0;
+    sleep(1);
+
+    while (!print_str(sc, "\x05\xFF\telephant"))
+        if (refresh_screen(sc))
+            debug(goto error);
+
+    sleep(1);
+
+    return free_screen(sc);
 
   error:
-    free_buf(b);
+    free_screen(sc);
     debug(return 1);
 }

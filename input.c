@@ -160,7 +160,7 @@ static Input init_input(FILE *fp, const char *fn, int blocking, int cooking,
     if (isatty(ip->fd)) {
         ip->is_tty = 1;
     } else {
-        if (errno)
+        if (errno == EBADF)
             debug(goto error);
     }
 

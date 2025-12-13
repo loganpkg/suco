@@ -33,4 +33,7 @@ cl /Wall /DDEBUG test_input.obj input.obj buf.obj int.obj ^
 cl /Wall /DDEBUG test_screen.obj screen.obj int.obj ^
     /Fe.\test\test_screen.exe
 
+cl /Wall /DDEBUG test_gap_buf.obj gap_buf.obj input.obj buf.obj int.obj ^
+    /Fe.\test\test_gap_buf.exe
+
 del *.obj

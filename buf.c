@@ -23,11 +23,14 @@
  * SUCH DAMAGE.
  */
 
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
 #include "buf.h"
+#include "debug.h"
 #include "int.h"
+
 
 struct buf {
     void *a;                    /* Memory. */
@@ -36,33 +39,6 @@ struct buf {
     size_t es;                  /* Element size. */
 };
 
-Buf init_buf(size_t init_num_elements, size_t element_size)
-{
-    Buf b;
-
-    if (!init_num_elements || !element_size)
-        return NULL;
-
-    if ((b = calloc(1, sizeof(struct buf))) == NULL)
-        return NULL;
-
-    b->a = NULL;                /* Do not assume that NULL is zero. */
-
-    if (mult_overflow(init_num_elements, element_size)) {
-        free(b);
-        return NULL;
-    }
-
-    if ((b->a = calloc(init_num_elements, element_size)) == NULL) {
-        free(b);
-        return NULL;
-    }
-
-    b->n = init_num_elements;
-    b->es = element_size;
-
-    return b;
-}
 
 void free_buf(Buf b)
 {
@@ -71,6 +47,36 @@ void free_buf(Buf b)
         free(b);
     }
 }
+
+
+Buf init_buf(size_t init_num_elements, size_t element_size)
+{
+    Buf b = NULL;
+
+    if (!init_num_elements || !element_size)
+        debug(goto error);
+
+    if ((b = calloc(1, sizeof(struct buf))) == NULL)
+        debug(goto error);
+
+    b->a = NULL;                /* Do not assume that NULL is zero. */
+
+    if (mult_overflow(init_num_elements, element_size))
+        debug(goto error);
+
+    if ((b->a = calloc(init_num_elements, element_size)) == NULL)
+        debug(goto error);
+
+    b->n = init_num_elements;
+    b->es = element_size;
+
+    return b;
+
+  error:
+    free_buf(b);
+    debug(return NULL);
+}
+
 
 int push(Buf b, void *object)
 {
@@ -81,15 +87,15 @@ int push(Buf b, void *object)
     if (b->i == b->n) {
         /* Need to grow the buffer. */
         if (mult_overflow(b->n, 2))
-            return 1;
+            debug(return 1);
 
         new_n = b->n * 2;
 
         if (mult_overflow(new_n, b->es))
-            return 1;
+            debug(return 1);
 
         if ((t = realloc(b->a, new_n * b->es)) == NULL)
-            return 1;
+            debug(return 1);
 
         b->a = t;
         b->n = new_n;
@@ -100,12 +106,19 @@ int push(Buf b, void *object)
     return 0;
 }
 
+
 int pop(Buf b, void *result)
 {
     if (!b->i)
-        return 1;
+        return 1;               /* Only returns 1 when empty. */
 
     memmove(result, (char *) b->a + --b->i * b->es, b->es);
 
     return 0;
+}
+
+
+void truncate_buf(Buf b)
+{
+    b->i = 0;
 }

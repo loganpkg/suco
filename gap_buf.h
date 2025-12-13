@@ -23,22 +23,33 @@
  * SUCH DAMAGE.
  */
 
-#ifndef BUF_H
-#define BUF_H
+#ifndef GAP_BUF_H
+#define GAP_BUF_H
 
 #include <stddef.h>
 
-typedef struct buf *Buf;
+typedef struct gap_buf *Gap_buf;
+
 
 /* Function declarations */
-void free_buf(Buf b);
+void free_gap_buf(Gap_buf gb);
 
-Buf init_buf(size_t init_num_elements, size_t element_size);
+Gap_buf init_gap_buf(size_t init_num_elements);
 
-int push(Buf b, void *object);
+int insert_ch(Gap_buf gb, char ch);
 
-int pop(Buf b, void *result);
+int delete_ch(Gap_buf gb);
 
-void truncate_buf(Buf b);
+int left_ch(Gap_buf gb);
+
+int right_ch(Gap_buf gb);
+
+int undo_gap_buf(Gap_buf gb);
+
+int redo_gap_buf(Gap_buf gb);
+
+void print_gap_buf(Gap_buf gb);
+
+int insert_file(Gap_buf gb, const char *fn);
 
 #endif
