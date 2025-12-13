@@ -5,5 +5,6 @@ test_*
 !*.c
 !*.h
 !*.sh
+!*.cmd
 !*.exp
 !*.md
