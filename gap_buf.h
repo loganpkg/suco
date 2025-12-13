@@ -26,52 +26,33 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#include <stdio.h>
+#ifndef GAP_BUF_H
+#define GAP_BUF_H
 
-#include "../buf.h"
-#include "../debug.h"
+#include <stddef.h>
 
-
-#define INIT_NUM_ELEMENTS 1
-#define ELEMENT_SIZE 10
+typedef struct gap_buf *Gap_buf;
 
 
-int main(void)
-{
-    Buf b = NULL;
-    char str[ELEMENT_SIZE];
+/* Function declarations */
+void free_gap_buf(Gap_buf gb);
 
-    if ((b = init_buf(INIT_NUM_ELEMENTS, ELEMENT_SIZE)) == NULL)
-        debug(goto error);
+Gap_buf init_gap_buf(size_t init_num_elements);
 
-    if (push(b, "cool"))
-        debug(goto error);
+int insert_ch(Gap_buf gb, char ch);
 
-    if (push(b, "elephant!"))
-        debug(goto error);
+int delete_ch(Gap_buf gb);
 
-    if (push(b, "whale"))
-        debug(goto error);
+int left_ch(Gap_buf gb);
 
-    if (pop(b, str))
-        debug(goto error);
+int right_ch(Gap_buf gb);
 
-    printf("%s\n", str);
+int undo_gap_buf(Gap_buf gb);
 
-    if (pop(b, str))
-        debug(goto error);
+int redo_gap_buf(Gap_buf gb);
 
-    printf("%s\n", str);
+void print_gap_buf(Gap_buf gb);
 
-    if (pop(b, str))
-        debug(goto error);
+int insert_file(Gap_buf gb, const char *fn);
 
-    printf("%s\n", str);
-
-    free_buf(b);
-    return 0;
-
-  error:
-    free_buf(b);
-    debug(return 1);
-}
+#endif
