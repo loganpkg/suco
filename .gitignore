@@ -2,3 +2,8 @@
 *.obj
 *.exe
 test_*
+!*.c
+!*.h
+!*.sh
+!*.exp
+!*.md

@@ -26,22 +26,94 @@
  * POSSIBILITY OF SUCH DAMAGE.
  */
 
-#ifndef BUF_H
-#define BUF_H
-
-#include <stddef.h>
-
-typedef struct buf *Buf;
-
-/* Function declarations */
-void free_buf(Buf b);
-
-Buf init_buf(size_t init_num_elements, size_t element_size);
-
-int push(Buf b, void *object);
-
-int pop(Buf b, void *result);
-
-void truncate_buf(Buf b);
-
+#ifdef _WIN32
+#include <Windows.h>
+#else
+#include <unistd.h>
 #endif
+
+#include <stdio.h>
+
+#include "../alias.h"
+#include "../debug.h"
+#include "../screen.h"
+
+#define ALPHABET_SIZE 26
+
+
+int print_alphabet(Screen sc, int mode, int increment)
+{
+    unsigned char u;
+    size_t i, j;
+
+    u = 'A';
+    for (i = 0; i < ALPHABET_SIZE; ++i) {
+        if (clear_screen(sc, mode))
+            debug(return 1);
+
+        for (j = 0; j <= i; j++)
+            print_ch(sc, u);
+
+        if (refresh_screen(sc))
+            debug(return 1);
+
+        if (increment)
+            ++u;
+
+        sleep(1);
+    }
+    return 0;
+}
+
+
+int main(void)
+{
+    Screen sc;
+
+    if ((sc = init_screen()) == NULL)
+        debug(return 1);
+
+    sleep(2);
+
+    if (print_alphabet(sc, HARD_CLEAR, 0))
+        debug(goto error);
+
+    if (print_alphabet(sc, SOFT_CLEAR, 0))
+        debug(goto error);
+
+    if (print_alphabet(sc, HARD_CLEAR, 1))
+        debug(goto error);
+
+    if (print_alphabet(sc, SOFT_CLEAR, 1))
+        debug(goto error);
+
+    highlight_on(sc);
+
+    if (print_str(sc, "cool world\n"))
+        debug(goto error);
+
+    highlight_off(sc);
+
+    if (print_str(sc, "\x01\x1B\n"))
+        debug(goto error);
+
+    if (move(sc, 0, 4))
+        debug(goto error);
+
+    if (refresh_screen(sc))
+        debug(goto error);
+
+    sleep(1);
+
+    while (!print_str(sc, "\x05\xFF\telephant"))
+        if (refresh_screen(sc))
+            debug(goto error);
+
+    sleep(1);
+
+    return free_screen(sc);
+
+  error:
+    free_screen(sc);
+    debug(return 1);
+}

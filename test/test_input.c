@@ -28,50 +28,87 @@
 
 #include <stdio.h>
 
-#include "../buf.h"
-#include "../debug.h"
+#ifdef _WIN32
+#include <Windows.h>
+#else
+#include <unistd.h>
+#endif
 
-
-#define INIT_NUM_ELEMENTS 1
-#define ELEMENT_SIZE 10
+#include "../alias.h"
+#include "../input.h"
 
 
 int main(void)
 {
-    Buf b = NULL;
-    char str[ELEMENT_SIZE];
+    Input ip;
+    int r, ch;
+    int non_blocking = 0;
 
-    if ((b = init_buf(INIT_NUM_ELEMENTS, ELEMENT_SIZE)) == NULL)
-        debug(goto error);
+    struct key_map km[] = {
+        { { CTRL_A, CTRL_B, CTRL_C, CTRL_D, CTRL_E, CTRL_F}, 0x300 },
+        { { ESC, 'x'}, 0x301 },
+        { { KEY_F1, KEY_F2, KEY_F12, KEY_DELETE, KEY_PAGE_UP}, 0x302 },
+        { { 0}, 0 }
+    };
 
-    if (push(b, "cool"))
-        debug(goto error);
+    if ((ip = init_input_stdin(BLOCKING, RAW, NULL)) == NULL)
+        return 1;
 
-    if (push(b, "elephant!"))
-        debug(goto error);
+    while (1) {
+        printf("=> ");
 
-    if (push(b, "whale"))
-        debug(goto error);
+        if (fflush(stdout)) {
+            free_input(ip);
+            return 1;
+        }
 
-    if (pop(b, str))
-        debug(goto error);
+        if (non_blocking)
+            sleep(2);
 
-    printf("%s\n", str);
+        r = get_ch(ip, &ch);
+        if (r == 1) {
+            free_input(ip);
+            return 1;
+        }
 
-    if (pop(b, str))
-        debug(goto error);
+        if (ch == EOF)
+            break;
 
-    printf("%s\n", str);
+        if (r == WOULD_BLOCK)
+            printf("_ \r\n");
+        else
+            printf("%02X \r\n", ch);
 
-    if (pop(b, str))
-        debug(goto error);
+        if (fflush(stdout)) {
+            free_input(ip);
+            return 1;
+        }
 
-    printf("%s\n", str);
+        if (ch == 'q')
+            break;
+        else if (ch == 'n') {
+            if (free_input(ip))
+                return 1;
 
-    free_buf(b);
+            if ((ip = init_input_stdin(NON_BLOCKING_TTY, COOKED, NULL))
+                == NULL)
+                return 1;
+
+            non_blocking = 1;
+        } else if (ch == 'd') {
+            if (free_input(ip))
+                return 1;
+
+            if ((ip = init_input_stdin(NON_BLOCKING_TTY, DOUBLE_COOKED, km))
+                == NULL)
+                return 1;
+
+            non_blocking = 1;
+        }
+    }
+
+    if (free_input(ip))
+        return 1;
+
     return 0;
-
-  error:
-    free_buf(b);
-    debug(return 1);
 }
