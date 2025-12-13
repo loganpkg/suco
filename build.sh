@@ -150,3 +150,5 @@ mv ./test/test_buf "$wd"/test/test_buf
 mv ./test/test_input "$wd"/test/test_input
 mv ./test/test_screen "$wd"/test/test_screen
 mv ./test/test_gap_buf "$wd"/test/test_gap_buf
+
+cp safe_vc.sh "$HOME"/bin/git
