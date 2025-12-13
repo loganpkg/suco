@@ -11,51 +11,49 @@
 #include <stdio.h>
 
 #include "../buf.h"
+#include "../debug.h"
+
+
+#define INIT_NUM_ELEMENTS 1
+#define ELEMENT_SIZE 10
+
 
 int main(void)
 {
-    Buf b;
-    char str[10];
+    Buf b = NULL;
+    char str[ELEMENT_SIZE];
 
-    if ((b = init_buf(1, 10)) == NULL)
-        return 1;
+    if ((b = init_buf(INIT_NUM_ELEMENTS, ELEMENT_SIZE)) == NULL)
+        debug(goto error);
 
-    if (push(b, "cool")) {
-        free_buf(b);
-        return 1;
-    }
+    if (push(b, "cool"))
+        debug(goto error);
 
-    if (push(b, "elephant!")) {
-        free_buf(b);
-        return 1;
-    }
+    if (push(b, "elephant!"))
+        debug(goto error);
 
-    if (push(b, "whale")) {
-        free_buf(b);
-        return 1;
-    }
+    if (push(b, "whale"))
+        debug(goto error);
 
-    if (pop(b, str)) {
-        free_buf(b);
-        return 1;
-    }
+    if (pop(b, str))
+        debug(goto error);
 
     printf("%s\n", str);
 
-    if (pop(b, str)) {
-        free_buf(b);
-        return 1;
-    }
+    if (pop(b, str))
+        debug(goto error);
 
     printf("%s\n", str);
 
-    if (pop(b, str)) {
-        free_buf(b);
-        return 1;
-    }
+    if (pop(b, str))
+        debug(goto error);
 
     printf("%s\n", str);
 
     free_buf(b);
     return 0;
+
+  error:
+    free_buf(b);
+    debug(return 1);
 }
