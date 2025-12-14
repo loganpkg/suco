@@ -119,10 +119,10 @@ typedef struct input *Input;
 int free_input(Input ip);
 
 Input init_input_stdin(int blocking, int cooking,
-                       struct key_map *second_level_km);
+                       const struct key_map *second_level_km);
 
 Input init_input_fn(const char *fn, int blocking, int cooking,
-                    struct key_map *second_level_km);
+                    const struct key_map *second_level_km);
 
 int get_ch(Input ip, int *ch);
 

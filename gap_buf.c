@@ -139,7 +139,7 @@ Gap_buf init_gap_buf(size_t init_num_elements)
 }
 
 
-int insert_ch(Gap_buf gb, char ch)
+int gb_insert_ch(Gap_buf gb, char ch)
 {
     /*
      * The character is written at g, then g is incremented.
@@ -211,7 +211,7 @@ int insert_ch(Gap_buf gb, char ch)
 }
 
 
-int delete_ch(Gap_buf gb)
+int gb_delete_ch(Gap_buf gb)
 {
     /*
      * c is incremented.
@@ -270,7 +270,7 @@ int delete_ch(Gap_buf gb)
 }
 
 
-int left_ch(Gap_buf gb)
+int gb_left_ch(Gap_buf gb)
 {
     /*
      * g and c are decremented, then the character at g is copied to c.
@@ -315,7 +315,7 @@ int left_ch(Gap_buf gb)
 }
 
 
-int right_ch(Gap_buf gb)
+int gb_right_ch(Gap_buf gb)
 {
     /*
      * The character at c is copied to g, then g and c are incremented.
@@ -393,11 +393,11 @@ static int undo(Gap_buf gb, int mode)
         } else {
             /* Move into position. */
             while (gb->g < op.g)
-                if (right_ch(gb))
+                if (gb_right_ch(gb))
                     debug(goto error);  /* Should not fail. */
 
             while (gb->g > op.g)
-                if (left_ch(gb))
+                if (gb_left_ch(gb))
                     debug(goto error);  /* Should not fail. */
 
             /* Check. */
@@ -408,12 +408,12 @@ static int undo(Gap_buf gb, int mode)
         /* Perform the opposite operation. */
         switch (op.type) {
         case INSERT:
-            if (delete_ch(gb))
+            if (gb_delete_ch(gb))
                 debug(goto error);
 
             break;
         case DELETE:
-            if (insert_ch(gb, op.ch))
+            if (gb_insert_ch(gb, op.ch))
                 debug(goto error);
 
             break;
@@ -443,19 +443,19 @@ static int undo(Gap_buf gb, int mode)
 }
 
 
-int undo_gap_buf(Gap_buf gb)
+int gb_undo(Gap_buf gb)
 {
     return undo(gb, UNDO);
 }
 
 
-int redo_gap_buf(Gap_buf gb)
+int gb_redo(Gap_buf gb)
 {
     return undo(gb, REDO);
 }
 
 
-void print_gap_buf(Gap_buf gb)
+void gb_debug_print(Gap_buf gb)
 {
     /* Useful for debugging. */
     size_t i;
@@ -476,7 +476,7 @@ void print_gap_buf(Gap_buf gb)
 }
 
 
-int insert_file(Gap_buf gb, const char *fn)
+int gb_insert_file(Gap_buf gb, const char *fn)
 {
     Input ip = NULL;
     int ch;
@@ -494,7 +494,7 @@ int insert_file(Gap_buf gb, const char *fn)
         if (ch == EOF)
             break;
 
-        if (insert_ch(gb, ch))
+        if (gb_insert_ch(gb, ch))
             debug(goto error);
     }
 
@@ -506,4 +506,70 @@ int insert_file(Gap_buf gb, const char *fn)
   error:
     free_input(ip);
     return 1;
+}
+
+
+int gb_set_fn(Gap_buf gb, const char *fn)
+{
+    size_t len;
+    char *t;
+
+    if (fn == NULL) {
+        if (gb->fn != NULL)
+            free(gb->fn);
+
+        gb->fn = NULL;
+        return 0;
+    }
+
+    len = strlen(fn);
+
+    /* Cannot overflow as already in memory. */
+    if ((t = calloc(len + 1, sizeof(char))) == NULL)
+        debug(return 1);
+
+    memmove(t, fn, len + 1);
+    gb->fn = t;
+
+    return 0;
+}
+
+
+void gb_start_of_line(Gap_buf gb)
+{
+    while (gb->g && *(gb->a + gb->g - 1) != '\n')
+        if (gb_left_ch(gb))
+            break;
+}
+
+
+void gb_end_of_line(Gap_buf gb)
+{
+    while (*(gb->a + gb->c) != '\n')
+        if (gb_right_ch(gb))
+            break;
+}
+
+
+char *gb_before_gap(Gap_buf gb, size_t *size)
+{
+    /*
+     * Not safe to use if the gap buffer undergoes modification
+     * or even navigation.
+     */
+
+    *size = gb->g;
+    return gb->a;
+}
+
+
+char *gb_after_gap(Gap_buf gb, size_t *size)
+{
+    /*
+     * Not safe to use if the gap buffer undergoes modification
+     * or even navigation.
+     */
+
+    *size = gb->e - gb->c + 1;
+    return gb->a + gb->c;
 }

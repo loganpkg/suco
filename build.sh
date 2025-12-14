@@ -143,12 +143,15 @@ cc $c_ops test_input.o input.o buf.o int.o -o test/test_input
 cc $c_ops test_screen.o screen.o int.o -o test/test_screen
 # shellcheck disable=SC2086
 cc $c_ops test_gap_buf.o gap_buf.o input.o buf.o int.o -o test/test_gap_buf
+# shellcheck disable=SC2086
+cc $c_ops suco.o gap_buf.o screen.o input.o buf.o int.o -o suco
 
 valgrind ./test/test_buf
 # valgrind ./test/test_input
-mv ./test/test_buf "$wd"/test/test_buf
-mv ./test/test_input "$wd"/test/test_input
-mv ./test/test_screen "$wd"/test/test_screen
-mv ./test/test_gap_buf "$wd"/test/test_gap_buf
+mv test/test_buf "$wd"/test/test_buf
+mv test/test_input "$wd"/test/test_input
+mv test/test_screen "$wd"/test/test_screen
+mv test/test_gap_buf "$wd"/test/test_gap_buf
+mv suco "$wd"/suco
 
 cp safe_vc.sh "$HOME"/bin/git

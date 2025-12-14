@@ -36,20 +36,30 @@ void free_gap_buf(Gap_buf gb);
 
 Gap_buf init_gap_buf(size_t init_num_elements);
 
-int insert_ch(Gap_buf gb, char ch);
+int gb_insert_ch(Gap_buf gb, char ch);
 
-int delete_ch(Gap_buf gb);
+int gb_delete_ch(Gap_buf gb);
 
-int left_ch(Gap_buf gb);
+int gb_left_ch(Gap_buf gb);
 
-int right_ch(Gap_buf gb);
+int gb_right_ch(Gap_buf gb);
 
-int undo_gap_buf(Gap_buf gb);
+int gb_undo(Gap_buf gb);
 
-int redo_gap_buf(Gap_buf gb);
+int gb_redo(Gap_buf gb);
 
-void print_gap_buf(Gap_buf gb);
+void gb_debug_print(Gap_buf gb);
 
-int insert_file(Gap_buf gb, const char *fn);
+int gb_insert_file(Gap_buf gb, const char *fn);
+
+int gb_set_fn(Gap_buf gb, const char *fn);
+
+void gb_start_of_line(Gap_buf gb);
+
+void gb_end_of_line(Gap_buf gb);
+
+char *gb_before_gap(Gap_buf gb, size_t *size);
+
+char *gb_after_gap(Gap_buf gb, size_t *size);
 
 #endif

@@ -41,4 +41,8 @@ int pop(Buf b, void *result);
 
 void truncate_buf(Buf b);
 
+void *get_buf_element(Buf b, size_t element);
+
+size_t buf_num_used_elements(Buf b);
+
 #endif

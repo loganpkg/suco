@@ -39,96 +39,96 @@ int main(void)
     if ((gb = init_gap_buf(INIT_NUM_ELEMENTS)) == NULL)
         debug(goto error);
 
-    print_gap_buf(gb);
+    gb_debug_print(gb);
 
     printf("Insert some characters:\n");
 
-    if (insert_ch(gb, 'e'))
+    if (gb_insert_ch(gb, 'e'))
         debug(goto error);
 
-    if (insert_ch(gb, 'l'))
+    if (gb_insert_ch(gb, 'l'))
         debug(goto error);
 
-    if (insert_ch(gb, 'e'))
+    if (gb_insert_ch(gb, 'e'))
         debug(goto error);
 
-    if (insert_ch(gb, 'p'))
+    if (gb_insert_ch(gb, 'p'))
         debug(goto error);
 
-    if (insert_ch(gb, 'h'))
+    if (gb_insert_ch(gb, 'h'))
         debug(goto error);
 
-    if (insert_ch(gb, 'a'))
+    if (gb_insert_ch(gb, 'a'))
         debug(goto error);
 
-    if (insert_ch(gb, 'n'))
+    if (gb_insert_ch(gb, 'n'))
         debug(goto error);
 
-    if (insert_ch(gb, 't'))
+    if (gb_insert_ch(gb, 't'))
         debug(goto error);
 
-    print_gap_buf(gb);
+    gb_debug_print(gb);
 
     printf("Move left 4 times:\n");
 
-    if (left_ch(gb))
+    if (gb_left_ch(gb))
         debug(goto error);
 
-    if (left_ch(gb))
+    if (gb_left_ch(gb))
         debug(goto error);
 
-    if (left_ch(gb))
+    if (gb_left_ch(gb))
         debug(goto error);
 
-    if (left_ch(gb))
+    if (gb_left_ch(gb))
         debug(goto error);
 
-    print_gap_buf(gb);
+    gb_debug_print(gb);
 
     printf("Delete two characters:\n");
 
-    if (delete_ch(gb))
+    if (gb_delete_ch(gb))
         debug(goto error);
 
-    if (delete_ch(gb))
+    if (gb_delete_ch(gb))
         debug(goto error);
 
-    print_gap_buf(gb);
+    gb_debug_print(gb);
 
     printf("Undo once:\n");
 
-    if (undo_gap_buf(gb))
+    if (gb_undo(gb))
         debug(goto error);
 
-    print_gap_buf(gb);
+    gb_debug_print(gb);
 
     printf("Redo once:\n");
 
-    if (redo_gap_buf(gb))
+    if (gb_redo(gb))
         debug(goto error);
 
-    print_gap_buf(gb);
+    gb_debug_print(gb);
 
     printf("Insert a file:\n");
 
-    if (insert_file(gb, "README.md"))
+    if (gb_insert_file(gb, "README.md"))
         debug(goto error);
 
-    print_gap_buf(gb);
+    gb_debug_print(gb);
 
     printf("Undo:\n");
 
-    if (undo_gap_buf(gb))
+    if (gb_undo(gb))
         debug(goto error);
 
-    print_gap_buf(gb);
+    gb_debug_print(gb);
 
     printf("Redo:\n");
 
-    if (redo_gap_buf(gb))
+    if (gb_redo(gb))
         debug(goto error);
 
-    print_gap_buf(gb);
+    gb_debug_print(gb);
 
     free_gap_buf(gb);
     return 0;

@@ -29,7 +29,7 @@
 
 set -e
 set -u
-set -x
+# set -x
 
 # Configuration.
 backup_location=$HOME/git_backups
@@ -56,7 +56,7 @@ wd=$(pwd)
 dst=$backup_location/$(date +%Y_%m_%d_%H_%M_%S)_$(basename "$wd")
 
 mkdir -p "$backup_location"
-cpdup -I "$wd" "$dst"
+cpdup "$wd" "$dst"
 
 # Need to use the full path so that this script is not called again.
 /usr/bin/git "$@"

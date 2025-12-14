@@ -33,7 +33,7 @@
 
 
 struct buf {
-    void *a;                    /* Memory. */
+    char *a;                    /* Memory. */
     size_t i;                   /* Index of next unused element. */
     size_t n;                   /* Number of elements allocated. */
     size_t es;                  /* Element size. */
@@ -101,7 +101,7 @@ int push(Buf b, void *object)
         b->n = new_n;
     }
 
-    memmove((char *) b->a + b->i++ * b->es, object, b->es);
+    memmove(b->a + b->i++ * b->es, object, b->es);
 
     return 0;
 }
@@ -112,7 +112,7 @@ int pop(Buf b, void *result)
     if (!b->i)
         return 1;               /* Only returns 1 when empty. */
 
-    memmove(result, (char *) b->a + --b->i * b->es, b->es);
+    memmove(result, b->a + --b->i * b->es, b->es);
 
     return 0;
 }
@@ -121,4 +121,19 @@ int pop(Buf b, void *result)
 void truncate_buf(Buf b)
 {
     b->i = 0;
+}
+
+
+void *get_buf_element(Buf b, size_t element)
+{
+    /* Pointer can change after reallocation, so not safe to use after push. */
+    if (element >= b->i)
+        debug(return NULL);     /* Out of bounds. */
+
+    return b->a + element * b->es;
+}
+
+size_t buf_num_used_elements(Buf b)
+{
+    return b->i;
 }

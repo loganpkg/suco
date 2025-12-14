@@ -58,9 +58,15 @@
 #define es_hide_cursor()  printf("\x1B[?25l")
 #define es_show_cursor()  printf("\x1B[?25h")
 
-/* y and x start from 0. */
-#define es_move(y, x)     printf("\x1B[%lu;%luH", \
-    (size_t) (y) + 1, (size_t) (x) + 1)
+/*
+ * Our y and x start from 0, so need to add 1 for the ANSI escape sequence.
+ * This macro evaluates y and x multiple times.
+ */
+#define es_move(sc, y, x) do { \
+    printf("\x1B[%lu;%luH", (size_t) (y) + 1, (size_t) (x) + 1); \
+    (sc)->s_y = (y); \
+    (sc)->s_x = (x); \
+} while (0)
 
 
 /*
@@ -75,13 +81,20 @@
 } while (0)
 
 
+/*
+ * y and x coordinates start from 0.
+ * y coordinates are vertical.
+ * x coordinates are horizontal.
+ */
 struct screen {
     int fd;
     size_t h;                   /* Screen height. */
     size_t w;                   /* Screen width. */
     size_t area;                /* Screen area. */
-    size_t y;                   /* Vertical coordinate (starts at 0). */
-    size_t x;                   /* Horizontal coordinate (starts at 0). */
+    size_t y;                   /* In memory cursor y coordinate. */
+    size_t x;                   /* In memory cursor x coordinate. */
+    size_t s_y;                 /* On displayed screen cursor y coordinate. */
+    size_t s_x;                 /* On displayed screen cursor x coordinate. */
     int highlight;              /* Indicates if highlight mode is on. */
 #ifdef _WIN32
     HANDLE console_handle;
@@ -93,6 +106,20 @@ struct screen {
     unsigned char *current_mem; /* Mirrors the displayed screen. */
     unsigned char *next_mem;    /* Used to prepare for the next display. */
 };
+
+
+static int hard_clear_display(Screen sc)
+{
+    es_reset();
+    es_blinking_off();
+    es_clear();
+    es_move(sc, 0, 0);
+
+    if (fflush(stdout))
+        debug(return 1);
+
+    return 0;
+}
 
 
 int clear_screen(Screen sc, int mode)
@@ -152,12 +179,7 @@ int clear_screen(Screen sc, int mode)
     sc->area = area;
 
     if (mode == HARD_CLEAR) {
-        es_reset();
-        es_blinking_off();
-        es_clear();
-        es_move(0, 0);
-
-        if (fflush(stdout))
+        if (hard_clear_display(sc))
             debug(return 1);
 
         memset(sc->current_mem, ' ', sc->area);
@@ -176,11 +198,15 @@ int free_screen(Screen sc)
     int r = 0;
 
     if (sc != NULL) {
+        if (hard_clear_display(sc))
+            debug(r = 1);
+
 #ifdef _WIN32
         if (sc->mode_backup
             && !SetConsoleMode(sc->console_handle, sc->mode_orig))
             debug(r = 1);
 #endif
+
         free(sc->current_mem);
         free(sc->next_mem);
         free(sc);
@@ -302,7 +328,6 @@ int refresh_screen(Screen sc)
 {
     size_t y, x;                /* In memory. */
     size_t i;
-    size_t s_y, s_x;            /* On displayed screen. */
     int s_rev = 0;              /* Displayed screen reverse setting is off. */
     unsigned char u;
 
@@ -320,11 +345,8 @@ int refresh_screen(Screen sc)
                 sc->current_mem[i] = u;
 
                 /* Optimisation to avoid unneeded moves. */
-                if (y != s_y || x != s_x) {
-                    es_move(y, x);
-                    s_y = y;
-                    s_x = x;
-                }
+                if (y != sc->s_y || x != sc->s_x)
+                    es_move(sc, y, x);
 
                 if (u & 1 << 7) {
                     /* Highlight. */
@@ -347,13 +369,13 @@ int refresh_screen(Screen sc)
                 /* Automatically advances the cursor on the display. */
                 putchar(u);
                 /* Track the displayed cursor's location. */
-                advance(s_y, s_x);
+                advance(sc->s_y, sc->s_x);
             }
         }
 
     /* Set the final displayed cursor location. */
-    if (sc->y != s_y || sc->x != s_x)
-        es_move(sc->y, sc->x);
+    if (sc->y != sc->s_y || sc->x != sc->s_x)
+        es_move(sc, sc->y, sc->x);
 
     /* Leave the reverse mode of the displayed screen off. */
     if (s_rev)

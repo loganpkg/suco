@@ -58,7 +58,7 @@ struct input {
     int blocking;               /* BLOCKING or NON_BLOCKING_TTY. */
     int cooking;                /* RAW, COOKED, or DOUBLE_COOKED. */
     /* Key map used for the second level of cooking. */
-    struct key_map *second_level_km;
+    const struct key_map *second_level_km;
 #ifndef _WIN32
     int terminal_backup;        /* Indicates if t_orig has been saved. */
     struct termios t_orig;      /* Used to restore the terminal settings. */
@@ -70,8 +70,8 @@ struct input {
 };
 
 
-typedef int (*Get_ch_func)(Input, int *ch);
-typedef int (*Unget_ch_func)(Input, int ch);
+typedef int (*Get_ch_func)(Input, int *);
+typedef int (*Unget_ch_func)(Input, int);
 
 
 int free_input(Input ip)
@@ -101,7 +101,7 @@ int free_input(Input ip)
 
 
 static Input init_input(FILE *fp, const char *fn, int blocking, int cooking,
-                        struct key_map *second_level_km)
+                        const struct key_map *second_level_km)
 {
     /*
      * Since this function is not accessible, fp should be open for reading.
@@ -244,14 +244,14 @@ static Input init_input(FILE *fp, const char *fn, int blocking, int cooking,
 
 
 Input init_input_stdin(int blocking, int cooking,
-                       struct key_map *second_level_km)
+                       const struct key_map *second_level_km)
 {
     return init_input(stdin, NULL, blocking, cooking, second_level_km);
 }
 
 
 Input init_input_fn(const char *fn, int blocking, int cooking,
-                    struct key_map *second_level_km)
+                    const struct key_map *second_level_km)
 {
     return init_input(NULL, fn, blocking, cooking, second_level_km);
 }
@@ -345,7 +345,8 @@ static int unget_double_cooked_ch(Input ip, int ch)
 
 
 static int cook_input(Input ip, Get_ch_func gf, Unget_ch_func uf,
-                      Buf this_level_unget_buf, struct key_map *km, int *ch)
+                      Buf this_level_unget_buf, const struct key_map *km,
+                      int *ch)
 {
     int r;
     int partial_match;
@@ -423,7 +424,7 @@ static int cook_input(Input ip, Get_ch_func gf, Unget_ch_func uf,
 
 static int get_cooked_ch(Input ip, int *ch)
 {
-    struct key_map km[] = {
+    const struct key_map km[] = {
         { { 0x08}, KEY_BACKSPACE },     /* Only one byte, but inconsistent. */
         { { 0xE0, 0x4B}, KEY_LEFT },
         { { 0xE0, 0x4D}, KEY_RIGHT },

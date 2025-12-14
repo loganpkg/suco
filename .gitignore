@@ -1,6 +1,7 @@
 *.o
 *.obj
 *.exe
+suco
 test_*
 !*.c
 !*.h

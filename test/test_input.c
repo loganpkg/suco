@@ -42,9 +42,9 @@ int main(void)
     int non_blocking = 0;
 
     struct key_map km[] = {
-        { { CTRL_A, CTRL_B, CTRL_C, CTRL_D, CTRL_E, CTRL_F}, 0x300 },
-        { { ESC, 'x'}, 0x301 },
-        { { KEY_F1, KEY_F2, KEY_F12, KEY_DELETE, KEY_PAGE_UP}, 0x302 },
+        { { CTRL_A, CTRL_B, CTRL_C, CTRL_D, CTRL_E, CTRL_F}, 0x200 },
+        { { ESC, 'x'}, 0x201 },
+        { { KEY_F1, KEY_F2, KEY_F12, KEY_DELETE, KEY_PAGE_UP}, 0x202 },
         { { 0}, 0 }
     };
 
