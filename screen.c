@@ -46,9 +46,6 @@
 #include "screen.h"
 
 
-#define TAB_SIZE 8
-
-
 /* ANSI escape sequences: */
 #define es_clear()        printf("\x1B[2J")
 #define es_reset()        printf("\x1B[0m")
@@ -69,16 +66,6 @@
 } while (0)
 
 
-/*
- * Advances coordinates by one, wrapping if need.
- * x is evaluated more than once.
- */
-#define advance(y, x) do {  \
-    if (++(x) == sc->w) {   \
-        ++(y);              \
-        (x) = 0;            \
-    }                       \
-} while (0)
 
 
 /*
@@ -265,49 +252,70 @@ Screen init_screen(void)
 }
 
 
+    /*
+     * As only printable chars are added to the memory,
+     * bit 7 is used as a highlight indicator.
+     */
+#define add_ch(ch) do {                                         \
+    /* Non-first char out of bounds. */                         \
+    if (sc->y >= y_origin + sub_h || sc->x >= x_origin + sub_w) \
+        return 0;                                               \
+                                                                \
+    sc->next_mem[sc->y * sc->w + sc->x]                         \
+        = sc->highlight ? (ch) | 1 << 7 : (ch);                 \
+    if (++sc->x == x_origin + sub_w) {                          \
+        ++sc->y;                                                \
+        sc->x = x_origin;                                       \
+    }                                                           \
+} while (0)
+
+
 int print_ch(Screen sc, char ch)
 {
-    size_t i, j, y_old;
+    return sub_screen_print_ch(sc, 0, 0, sc->h, sc->w, ch);
+}
 
-    i = sc->y * sc->w + sc->x;
-    if (i == sc->area)
-        debug(return 1);        /* Off screen. */
+
+int sub_screen_print_ch(Screen sc, size_t y_origin, size_t x_origin,
+                        size_t sub_h, size_t sub_w, char ch)
+{
+    /*
+     * Some characters are displayed as multiple chars, such as tab.
+     * The newline character is displayed as a sequence of spaces until
+     * the edge is reached.
+     * For these characters, so long as the first displayed character
+     * is within bounds, no error will result, even if the rest is out
+     * of bounds.
+     */
+    size_t j, y_old;
+
+    /* Check if out of bounds. If not, first char will be printed. */
+    if (sc->y >= y_origin + sub_h || sc->x >= x_origin + sub_w)
+        return 1;
 
     if (isprint(ch)) {
-        /*
-         * As only printable chars are added to the memory,
-         * bit 7 is used as a highlight indicator.
-         */
-        if (sc->highlight)
-            ch |= 1 << 7;
-
-        sc->next_mem[i] = ch;
-        advance(sc->y, sc->x);
+        add_ch(ch);
     } else if (ch == '\t') {
         j = TAB_SIZE;
         while (j--)
-            if (print_ch(sc, ' '))
-                debug(return 1);
+            add_ch(' ');
     } else if (ch == '\n') {
         /* Clear to the end of the line. */
         y_old = sc->y;
         while (sc->y == y_old)
-            if (print_ch(sc, ' '))
-                debug(return 1);
+            add_ch(' ');
     } else if (iscntrl(ch)) {
-        if (print_ch(sc, '^'))
-            debug(return 1);
-
+        add_ch('^');
         /* Toggle bit 6 (the lowest bit is bit 0). */
-        if (print_ch(sc, ch ^ 1 << 6))
-            debug(return 1);
+        add_ch(ch ^ 1 << 6);
     } else {
-        if (print_ch(sc, '?'))
-            debug(return 1);
+        add_ch('?');
     }
 
     return 0;
 }
+
+#undef add_ch
 
 
 int print_str(Screen sc, const char *str)
@@ -368,8 +376,12 @@ int refresh_screen(Screen sc)
 
                 /* Automatically advances the cursor on the display. */
                 putchar(u);
+
                 /* Track the displayed cursor's location. */
-                advance(sc->s_y, sc->s_x);
+                if (++sc->s_x == sc->w) {
+                    ++sc->s_y;
+                    sc->s_x = 0;
+                }
             }
         }
 

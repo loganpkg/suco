@@ -38,14 +38,27 @@
 #define INIT_NUM_GB_BUF_ELEMENTS 12
 #define INIT_NUM_GB_ELEMENTS 512
 
+#define MIN_SCREEN_HEIGHT 3
+#define NUM_NON_TEXT_SCREEN_ROWS 2
+
+
 /* This moves the command identifiers beyond the normal cooked key range. */
 #define CMD_ID_OFFSET 0x200
 
+/* Increments each time it is used. */
+#define CMD_COUNTER __COUNTER__
+
+/* Command Identifier. */
+#define ID (CMD_ID_OFFSET + CMD_COUNTER)
+
+
 struct editor {
-    Buf gb_buf;                 /* Buffer of gap buffers. */
+    /* Buffer of gap buffers. The command line gap buffer is element 0. */
+    Buf gb_buf;
     size_t active_gb_i;         /* Index into gb_buf to the active gb. */
-    Gap_buf active_gb;          /* Shortcut. */
+    Gap_buf active_gb;          /* Shortcut. Do not free. */
     Input ip;
+    int ch;                     /* Read character. */
     Screen sc;
     int rv;                     /* Return value of the last command. */
     int running;                /* Text editor is on. */
@@ -79,12 +92,8 @@ int free_editor(Editor ed)
     int r = 0;
 
     if (ed != NULL) {
-        while (pop(ed->gb_buf, &gb) == 0) {
-            if (gb_insert_ch(gb, 'c'))
-                fprintf(stderr, "WOW\n");
-
+        while (pop(ed->gb_buf, &gb) == 0)
             free_gap_buf(gb);
-        }
 
         free_buf(ed->gb_buf);
 
@@ -160,32 +169,19 @@ int add_gap_buf(Editor ed, const char *fn)
 int draw_screen(Editor ed)
 {
     Gap_buf gb = ed->active_gb;
-    char *p;
-    size_t s, i, y, x;
+    size_t h, w;
+
+    h = get_screen_height(ed->sc);
+    w = get_screen_width(ed->sc);
+
+    if (h < MIN_SCREEN_HEIGHT)
+        debug(return 1);
 
     if (clear_screen(ed->sc, SOFT_CLEAR))
         debug(return 1);
 
-    if ((p = gb_before_gap(gb, &s)) == NULL)
-        debug(return 1);
-
-    for (i = 0; i < s; ++i)
-        if (print_ch(ed->sc, *(p + i)))
-            debug(return 1);
-
-    /* Record location on the screen where the cursor should be. */
-    y = get_y(ed->sc);
-    x = get_x(ed->sc);
-
-    if ((p = gb_after_gap(gb, &s)) == NULL)
-        debug(return 1);
-
-    for (i = 0; i < s; ++i)
-        if (print_ch(ed->sc, *(p + i)))
-            debug(return 1);
-
-    /* Place cursor in the correct location. */
-    if (move(ed->sc, y, x))
+    if (gb_print
+        (gb, ed->sc, 0, 0 + 20, h - NUM_NON_TEXT_SCREEN_ROWS, w - 20 - 20, 1))
         debug(return 1);
 
     if (refresh_screen(ed->sc))
@@ -243,29 +239,92 @@ void ed_close(Editor ed)
 }
 
 
+void ed_left_gb(Editor ed)
+{
+    if (!ed->active_gb_i)       /* Already at the first gap buffer. */
+        ed->rv = 1;
+    else if (set_active_gb(ed, ed->active_gb_i - 1))
+        ed->rv = 1;
+}
+
+
+void ed_right_gb(Editor ed)
+{
+    if (set_active_gb(ed, ed->active_gb_i + 1))
+        ed->rv = 1;
+}
+
+
+void ed_goto_gb(Editor ed)
+{
+    if (set_active_gb(ed, ed->ch - CMD_ID_OFFSET))
+        ed->rv = 1;
+}
+
+
+void ed_set_mark(Editor ed)
+{
+    gb_set_mark(ed->active_gb);
+}
+
+
+void ed_centre(Editor ed)
+{
+    gb_request_centring(ed->active_gb);
+}
+
+
 int main(int argc, char **argv)
 {
     Editor ed = NULL;
-    int i, ch;
+    int i;
 
     const struct key_map km[] = {
-        { { CTRL_D}, CMD_ID_OFFSET },
-        { { KEY_DELETE}, CMD_ID_OFFSET + 1 },
-        { { CTRL_B}, CMD_ID_OFFSET + 2 },
-        { { KEY_LEFT}, CMD_ID_OFFSET + 3 },
-        { { CTRL_F}, CMD_ID_OFFSET + 4 },
-        { { KEY_RIGHT}, CMD_ID_OFFSET + 5 },
-        { { ESC, '-'}, CMD_ID_OFFSET + 6 },
-        { { ESC, '='}, CMD_ID_OFFSET + 7 },
-        { { CTRL_A}, CMD_ID_OFFSET + 8 },
-        { { KEY_HOME}, CMD_ID_OFFSET + 9 },
-        { { CTRL_E}, CMD_ID_OFFSET + 10 },
-        { { KEY_END}, CMD_ID_OFFSET + 11 },
-        { { CTRL_X, CTRL_C}, CMD_ID_OFFSET + 12 },
+        { { KEY_F1}, ID },
+        { { KEY_F2}, ID },
+        { { KEY_F3}, ID },
+        { { KEY_F4}, ID },
+        { { KEY_F5}, ID },
+        { { KEY_F6}, ID },
+        { { KEY_F7}, ID },
+        { { KEY_F8}, ID },
+        { { KEY_F9}, ID },
+        { { KEY_F10}, ID },
+        { { KEY_F11}, ID },
+        { { KEY_F12}, ID },
+        { { CTRL_D}, ID },
+        { { KEY_DELETE}, ID },
+        { { CTRL_B}, ID },
+        { { KEY_LEFT}, ID },
+        { { CTRL_F}, ID },
+        { { KEY_RIGHT}, ID },
+        { { ESC, '-'}, ID },
+        { { ESC, '='}, ID },
+        { { CTRL_A}, ID },
+        { { KEY_HOME}, ID },
+        { { CTRL_E}, ID },
+        { { KEY_END}, ID },
+        { { CTRL_X, CTRL_C}, ID },
+        { { CTRL_X, KEY_LEFT}, ID },
+        { { CTRL_X, KEY_RIGHT}, ID },
+        { { 0}, ID },
+        { { CTRL_L}, ID },
         { { 0}, 0 }
     };
 
     const Ed_func edf[] = {
+        &ed_goto_gb,
+        &ed_goto_gb,
+        &ed_goto_gb,
+        &ed_goto_gb,
+        &ed_goto_gb,
+        &ed_goto_gb,
+        &ed_goto_gb,
+        &ed_goto_gb,
+        &ed_goto_gb,
+        &ed_goto_gb,
+        &ed_goto_gb,
+        &ed_goto_gb,
         &ed_delete_ch,
         &ed_delete_ch,
         &ed_left_ch,
@@ -278,7 +337,11 @@ int main(int argc, char **argv)
         &ed_start_of_line,
         &ed_end_of_line,
         &ed_end_of_line,
-        &ed_close
+        &ed_close,
+        &ed_left_gb,
+        &ed_right_gb,
+        &ed_set_mark,
+        &ed_centre
     };
 
     if ((ed = init_editor(km)) == NULL)
@@ -306,13 +369,17 @@ int main(int argc, char **argv)
          */
         ed->rv = 0;
 
-        if (get_ch(ed->ip, &ch))
+        if (get_ch(ed->ip, &ed->ch))
             debug(goto error);
 
-        if (ch >= CMD_ID_OFFSET)
-            (*edf[ch - CMD_ID_OFFSET]) (ed);
-        else if (ch <= UCHAR_MAX && isprint(ch)
-                 && gb_insert_ch(ed->active_gb, ch))
+        if (ed->ch == '\r')
+            ed->ch = '\n';
+
+        if (ed->ch >= CMD_ID_OFFSET)
+            (*edf[ed->ch - CMD_ID_OFFSET]) (ed);
+        else if (ed->ch <= UCHAR_MAX
+                 && (isprint(ed->ch) || ed->ch == '\t' || ed->ch == '\n')
+                 && gb_insert_ch(ed->active_gb, ed->ch))
             debug(goto error);
     }
 

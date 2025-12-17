@@ -37,7 +37,7 @@ typedefs=$(grep -r --exclude-dir='.git' -E typedef \
     | tr '\n' ' ' \
     | sed -E 's/ +$//')
 
-indent_ops='-kr -nut -l80 '"$typedefs"
+indent_ops='-kr -nut -l79 '"$typedefs"
 export indent_ops
 
 build_c() {
@@ -142,7 +142,9 @@ cc $c_ops test_input.o input.o buf.o int.o -o test/test_input
 # shellcheck disable=SC2086
 cc $c_ops test_screen.o screen.o int.o -o test/test_screen
 # shellcheck disable=SC2086
-cc $c_ops test_gap_buf.o gap_buf.o input.o buf.o int.o -o test/test_gap_buf
+cc $c_ops test_gap_buf.o gap_buf.o screen.o input.o buf.o int.o \
+    -o test/test_gap_buf
+
 # shellcheck disable=SC2086
 cc $c_ops suco.o gap_buf.o screen.o input.o buf.o int.o -o suco
 

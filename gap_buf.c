@@ -23,6 +23,7 @@
  * SUCH DAMAGE.
  */
 
+#include <ctype.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -69,6 +70,12 @@ struct operation {
 };
 
 
+    /*
+     * The region is the text between the mark (inclusive) and the
+     * cursor (exclusive), or the cursor (inclusive) and the
+     * mark (exclusive), depending on which one comes first.
+     */
+
 struct gap_buf {
     char *fn;                   /* Filename associated with the gap buffer. */
     Buf undo;                   /* Undo stack. */
@@ -77,10 +84,13 @@ struct gap_buf {
     char *a;                    /* Memory. */
     size_t g;                   /* Start of gap. */
     size_t c;                   /* Cursor. */
-    /* End of gap buffer (last char included inside of memory allocation). */
-    size_t e;
+    size_t e;                   /* End of gap buffer (included in memory). */
+    size_t m;                   /* Mark. This is a saved "g-value." */
+    int m_set;                  /* Indicates that the mark is set. */
     size_t row;                 /* Cursor row. Starts from 1. */
     size_t col;                 /* Cursor column. Starts from 0. */
+    size_t d;                   /* Draw start. This can be compared with g. */
+    int rc;                     /* Request centring. */
     size_t mod;                 /* Modified indicator. */
 };
 
@@ -204,6 +214,10 @@ int gb_insert_ch(Gap_buf gb, char ch)
         ++gb->col;
     }
 
+    /* Clear the mark. */
+    gb->m_set = 0;
+    gb->m = 0;
+
     /* Set the modified indicator. */
     gb->mod = 1;
 
@@ -263,6 +277,9 @@ int gb_delete_ch(Gap_buf gb)
 
     /* Expand the gap to the right. */
     ++gb->c;
+
+    gb->m_set = 0;
+    gb->m = 0;
 
     gb->mod = 1;
 
@@ -551,25 +568,211 @@ void gb_end_of_line(Gap_buf gb)
 }
 
 
-char *gb_before_gap(Gap_buf gb, size_t *size)
+void gb_set_mark(Gap_buf gb)
 {
-    /*
-     * Not safe to use if the gap buffer undergoes modification
-     * or even navigation.
-     */
-
-    *size = gb->g;
-    return gb->a;
+    gb->m = gb->g;
+    gb->m_set = 1;
 }
 
 
-char *gb_after_gap(Gap_buf gb, size_t *size)
+void gb_request_centring(Gap_buf gb)
+{
+    gb->rc = 1;
+}
+
+
+#define check() do {                                            \
+    ++x;                                                        \
+    if (ch == '\n' || x == sub_w ) {                            \
+        ++y;                                                    \
+        x = 0;                                                  \
+    }                                                           \
+    if (!d_centre_set && y == sub_h / 2 + 1) {                  \
+        /*                                                      \
+         * Save d_centre for later.                             \
+         * Plus 1 to move back in bounds.                       \
+         * Prevents mult-position chars from being half-off.    \
+         */                                                     \
+        d_centre = i + 1;                                       \
+        d_centre_set = 1;                                       \
+        if (gb->rc) /* Stop early. */                           \
+             goto end;                                          \
+    }                                                           \
+    if (y == sub_h) {                                           \
+        /* Off sub-screen. */                                   \
+        ++i;                                                    \
+        goto end;                                               \
+    }                                                           \
+} while (0)
+
+
+static int gb_centre(Gap_buf gb, size_t sub_h, size_t sub_w)
 {
     /*
-     * Not safe to use if the gap buffer undergoes modification
-     * or even navigation.
+     * This function simulates printing backwards to see if the cursor would
+     * be printed within the bounds of an abstract sub_h by sub_w screen size.
+     * Draw start, d, will be changed if the cursor would be off the screen,
+     * or if centring was requested (rc was set).
      */
+    size_t y, x, i, j;
+    char ch;
+    int d_centre_set = 0;
+    size_t d_centre;
 
-    *size = gb->e - gb->c + 1;
-    return gb->a + gb->c;
+    if (!sub_h || !sub_w)
+        debug(return 1);
+
+    if (mult_overflow(sub_h, sub_w))
+        debug(return 1);
+
+    if (!gb->g) {
+        /* At the start of the buffer. */
+        gb->d = 0;
+        gb->rc = 0;
+        return 0;
+    }
+
+    /*
+     * Obvious off screen checks.
+     * If g is less than d, then the cursor is off the screen above.
+     * Every character takes at least one screen position to be printed,
+     * so the area check is a good short-circuit for when the cursor is
+     * far off the screen below.
+     */
+    if (gb->g < gb->d || gb->g - gb->d > sub_h * sub_w)
+        gb->rc = 1;
+
+    i = gb->g - 1;
+    y = 0;
+    x = 0;
+    while (1) {
+        ch = *(gb->a + i);
+        if (ch == '\n') {
+            check();
+        } else if (ch == '\t') {
+            /*
+             * A long character, like a tab, can wrap multiple times when
+             * the screen is narrow. So need to check after each char.
+             */
+            for (j = 0; j < TAB_SIZE; ++j)
+                check();
+        } else if (iscntrl(ch)) {
+            for (j = 0; j < CTRL_CH_SIZE; ++j)
+                check();
+        } else {
+            check();
+        }
+
+        if (!i)
+            break;
+
+        --i;
+    }
+
+  end:
+
+    if (gb->rc || gb->d < i) {
+        /* Would be off screen, so centre. */
+        if (d_centre_set)
+            gb->d = d_centre;
+        else
+            gb->d = i;          /* Not enough text to reach the centre. */
+
+        gb->rc = 0;
+        return 0;
+    }
+
+    /* Current draw start is OK. */
+    return 0;
+}
+
+#undef check
+
+
+int gb_print(Gap_buf gb, Screen sc, size_t y_origin, size_t x_origin,
+             size_t sub_h, size_t sub_w, int move_cursor)
+{
+    size_t h, w, i, y, x;
+
+    h = get_screen_height(sc);
+    w = get_screen_width(sc);
+
+    if (add_overflow(y_origin, sub_h) || add_overflow(x_origin, sub_w))
+        debug(return 1);
+
+    if (y_origin + sub_h > h || x_origin + sub_w > w)
+        debug(return 1);
+
+    if (gb_centre(gb, sub_h, sub_w))
+        debug(return 1);
+
+    /* Place cursor at the left-hand side of the starting row. */
+    if (move(sc, y_origin, x_origin))
+        debug(return 1);
+
+    /* Print before the gap. */
+    i = gb->d;
+    if (gb->m_set && gb->m < gb->g) {
+        /* Before the region. */
+        for (; i < gb->m; ++i)
+            if (sub_screen_print_ch(sc, y_origin, x_origin, sub_h, sub_w,
+                                    *(gb->a + i)))
+                debug(return 1);
+
+        highlight_on(sc);
+    }
+
+    for (; i < gb->g; ++i)
+        if (sub_screen_print_ch(sc, y_origin, x_origin, sub_h, sub_w,
+                                *(gb->a + i)))
+            debug(return 1);
+
+    if (gb->m_set && gb->m < gb->g)
+        highlight_off(sc);
+
+    /* Record location on the screen where the cursor should be. */
+    y = get_y(sc);
+    x = get_x(sc);
+
+    /* Cursor out of designated sub-screen area. */
+    if (y >= y_origin + sub_h || x >= x_origin + sub_w)
+        debug(return 1);
+
+    /* Print after the gap. */
+
+    i = gb->c;
+    /*
+     * Print the cursor, always without highlighting.
+     * Failure is OK, as only the first char of a multi-byte character,
+     * or a newline char which is printed as a sequence of space chars
+     * until the edge of the screen, needs to be on the screen.
+     */
+    sub_screen_print_ch(sc, y_origin, x_origin, sub_h, sub_w, *(gb->a + i));
+
+    ++i;
+
+    /* Region. */
+    if (gb->m_set && gb->m > gb->g) {
+        highlight_on(sc);
+        /*
+         * m must be compared to g.
+         * Failure is OK, as cursor has been printed.
+         */
+        for (; i < gb->c + (gb->m - gb->g); ++i)
+            sub_screen_print_ch(sc, y_origin, x_origin, sub_h, sub_w,
+                                *(gb->a + i));
+
+        highlight_off(sc);
+    }
+
+    /* Failure is OK. */
+    for (; i <= gb->e; ++i)
+        sub_screen_print_ch(sc, y_origin, x_origin, sub_h, sub_w,
+                            *(gb->a + i));
+
+    /* Place cursor in the correct location. */
+    if (move_cursor && move(sc, y, x))
+        debug(return 1);
+
+    return 0;
 }
