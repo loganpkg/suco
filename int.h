@@ -26,4 +26,6 @@
 /* Function declarations */
 int mult_overflow(size_t a, size_t b);
 
+int add_overflow(size_t a, size_t b);
+
 #endif
