@@ -26,13 +26,25 @@
  * POSSIBILITY OF SUCH DAMAGE.
  */
 
+#include <stdio.h>
 #include <stdint.h>
+
+#include "debug.h"
 #include "int.h"
 
 int mult_overflow(size_t a, size_t b)
 {
     if (b && a > SIZE_MAX / b)
-        return 1;
+        debug(return 1);
+
+    return 0;
+}
+
+
+int add_overflow(size_t a, size_t b)
+{
+    if (a > SIZE_MAX - b)
+        debug(return 1);
 
     return 0;
 }
