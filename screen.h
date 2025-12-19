@@ -50,10 +50,16 @@ int free_screen(Screen sc);
 
 Screen init_screen(void);
 
-int print_ch(Screen sc, char ch);
+int soft_clear_sub_screen(Screen sc, size_t y_origin, size_t x_origin,
+                          size_t sub_h, size_t sub_w);
 
 int sub_screen_print_ch(Screen sc, size_t y_origin, size_t x_origin,
                         size_t sub_h, size_t sub_w, char ch);
+
+int sub_screen_print_str(Screen sc, size_t y_origin, size_t x_origin,
+                         size_t sub_h, size_t sub_w, const char *str);
+
+int print_ch(Screen sc, char ch);
 
 int print_str(Screen sc, const char *str);
 

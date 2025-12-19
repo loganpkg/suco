@@ -31,6 +31,10 @@
 #define fileno _fileno
 #define isatty _isatty
 #define sleep(sec) Sleep((sec) * 1000)
+/* For size_t. */
+#define lu "zu"
+#else
+#define lu "lu"
 #endif
 
 extern int dummy;

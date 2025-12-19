@@ -23,20 +23,25 @@
 :: SUCH DAMAGE.
 ::
 
-cl /c /Wall /DDEBUG *.c .\test\*.c
+set c_ops=/Qspectre /Wall /wd4820 /wd5045 /I. /DDEBUG
 
-cl /Wall /DDEBUG test_buf.obj buf.obj int.obj /Fe.\test\test_buf.exe
+cl /c %c_ops% *.c .\test\*.c
 
-cl /Wall /DDEBUG test_input.obj input.obj buf.obj int.obj ^
+cl %c_ops% test_buf.obj buf.obj int.obj /Fe.\test\test_buf.exe
+
+cl %c_ops% test_input.obj input.obj buf.obj int.obj ^
     /Fe.\test\test_input.exe
 
-cl /Wall /DDEBUG test_screen.obj screen.obj int.obj ^
+cl %c_ops% test_screen.obj screen.obj int.obj ^
     /Fe.\test\test_screen.exe
 
-cl /Wall /DDEBUG test_gap_buf.obj gap_buf.obj input.obj buf.obj int.obj ^
+cl %c_ops% test_gap_buf.obj gap_buf.obj screen.obj input.obj buf.obj int.obj ^
     /Fe.\test\test_gap_buf.exe
 
-cl /Wall /DDEBUG suco.obj gap_buf.obj screen.obj input.obj buf.obj int.obj ^
+cl %c_ops% test_dll.obj doubly_linked_list.obj ^
+    /Fe.\test\test_dll.exe
+
+cl %c_ops% suco.obj gap_buf.obj screen.obj input.obj buf.obj int.obj ^
     /Fesuco.exe
 
 del *.obj

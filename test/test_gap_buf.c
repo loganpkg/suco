@@ -25,8 +25,8 @@
 
 #include <stdio.h>
 
-#include "../debug.h"
-#include "../gap_buf.h"
+#include <debug.h>
+#include <gap_buf.h>
 
 
 #define INIT_NUM_ELEMENTS 10

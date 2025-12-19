@@ -100,7 +100,10 @@
 #define KEY_F10       0x0114
 #define KEY_F11       0x0115
 #define KEY_F12       0x0116
-
+#define CTRL_LEFT     0x0117
+#define CTRL_RIGHT    0x0118
+#define CTRL_UP       0x0119
+#define CTRL_DOWN     0x011A
 
 #define MAX_SEQ 10
 

@@ -23,11 +23,16 @@
  * SUCH DAMAGE.
  */
 
+#if defined(__linux__) && !defined(_DEFAULT_SOURCE)
+#define _DEFAULT_SOURCE
+#endif
+
 #include <ctype.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
+#include "alias.h"
 #include "buf.h"
 #include "debug.h"
 #include "gap_buf.h"
@@ -92,6 +97,8 @@ struct gap_buf {
     size_t d;                   /* Draw start. This can be compared with g. */
     int rc;                     /* Request centring. */
     size_t mod;                 /* Modified indicator. */
+    char *sb;                   /* Status bar. */
+    size_t sb_s;                /* Status bar allocated size. */
 };
 
 
@@ -102,6 +109,7 @@ void free_gap_buf(Gap_buf gb)
         free_buf(gb->undo);
         free_buf(gb->redo);
         free(gb->a);
+        free(gb->sb);
         free(gb);
     }
 }
@@ -122,6 +130,7 @@ Gap_buf init_gap_buf(size_t init_num_elements)
     gb->undo = NULL;
     gb->redo = NULL;
     gb->a = NULL;
+    gb->sb = NULL;
 
     if ((gb->undo =
          init_buf(init_num_elements, sizeof(struct operation))) == NULL)
@@ -322,7 +331,7 @@ int gb_left_ch(Gap_buf gb)
 
         /* Need to recalculate the column number. */
         i = gb->g;
-        while (i && *(gb->a + i--) != '\n')
+        while (i && *(gb->a + --i) != '\n')
             ++gb->col;
     } else {
         --gb->col;
@@ -511,7 +520,7 @@ int gb_insert_file(Gap_buf gb, const char *fn)
         if (ch == EOF)
             break;
 
-        if (gb_insert_ch(gb, ch))
+        if (gb_insert_ch(gb, (char) ch))
             debug(goto error);
     }
 
@@ -568,6 +577,18 @@ void gb_end_of_line(Gap_buf gb)
 }
 
 
+void gb_start_of_buffer(Gap_buf gb)
+{
+    while (!gb_left_ch(gb));
+}
+
+
+void gb_end_of_buffer(Gap_buf gb)
+{
+    while (!gb_right_ch(gb));
+}
+
+
 void gb_set_mark(Gap_buf gb)
 {
     gb->m = gb->g;
@@ -617,7 +638,7 @@ static int gb_centre(Gap_buf gb, size_t sub_h, size_t sub_w)
     size_t y, x, i, j;
     char ch;
     int d_centre_set = 0;
-    size_t d_centre;
+    size_t d_centre = 0;
 
     if (!sub_h || !sub_w)
         debug(return 1);
@@ -690,9 +711,20 @@ static int gb_centre(Gap_buf gb, size_t sub_h, size_t sub_w)
 
 
 int gb_print(Gap_buf gb, Screen sc, size_t y_origin, size_t x_origin,
-             size_t sub_h, size_t sub_w, int move_cursor)
+             size_t sub_h, size_t sub_w, int sb_option, size_t *cursor_y,
+             size_t *cursor_x)
 {
-    size_t h, w, i, y, x;
+    char *t;
+    size_t h, w, text_h, i, y, x;
+
+    if (sb_option != INCLUDE_STATUS_BAR && sb_option != EXCLUDE_STATUS_BAR)
+        debug(return 1);
+
+    if (!sub_h || !sub_w)
+        debug(return 1);
+
+    if (sb_option == INCLUDE_STATUS_BAR && sub_h < 2)
+        debug(return 1);
 
     h = get_screen_height(sc);
     w = get_screen_width(sc);
@@ -703,7 +735,13 @@ int gb_print(Gap_buf gb, Screen sc, size_t y_origin, size_t x_origin,
     if (y_origin + sub_h > h || x_origin + sub_w > w)
         debug(return 1);
 
-    if (gb_centre(gb, sub_h, sub_w))
+    if (sb_option == INCLUDE_STATUS_BAR)
+        text_h = sub_h - 1;
+    else
+        text_h = sub_h;
+
+    /* Minus one for the status bar. */
+    if (gb_centre(gb, text_h, sub_w))
         debug(return 1);
 
     /* Place cursor at the left-hand side of the starting row. */
@@ -715,7 +753,7 @@ int gb_print(Gap_buf gb, Screen sc, size_t y_origin, size_t x_origin,
     if (gb->m_set && gb->m < gb->g) {
         /* Before the region. */
         for (; i < gb->m; ++i)
-            if (sub_screen_print_ch(sc, y_origin, x_origin, sub_h, sub_w,
+            if (sub_screen_print_ch(sc, y_origin, x_origin, text_h, sub_w,
                                     *(gb->a + i)))
                 debug(return 1);
 
@@ -723,7 +761,7 @@ int gb_print(Gap_buf gb, Screen sc, size_t y_origin, size_t x_origin,
     }
 
     for (; i < gb->g; ++i)
-        if (sub_screen_print_ch(sc, y_origin, x_origin, sub_h, sub_w,
+        if (sub_screen_print_ch(sc, y_origin, x_origin, text_h, sub_w,
                                 *(gb->a + i)))
             debug(return 1);
 
@@ -734,8 +772,8 @@ int gb_print(Gap_buf gb, Screen sc, size_t y_origin, size_t x_origin,
     y = get_y(sc);
     x = get_x(sc);
 
-    /* Cursor out of designated sub-screen area. */
-    if (y >= y_origin + sub_h || x >= x_origin + sub_w)
+    /* Cursor out of designated sub-screen text area. */
+    if (y >= y_origin + text_h || x >= x_origin + sub_w)
         debug(return 1);
 
     /* Print after the gap. */
@@ -747,7 +785,7 @@ int gb_print(Gap_buf gb, Screen sc, size_t y_origin, size_t x_origin,
      * or a newline char which is printed as a sequence of space chars
      * until the edge of the screen, needs to be on the screen.
      */
-    sub_screen_print_ch(sc, y_origin, x_origin, sub_h, sub_w, *(gb->a + i));
+    sub_screen_print_ch(sc, y_origin, x_origin, text_h, sub_w, *(gb->a + i));
 
     ++i;
 
@@ -759,7 +797,7 @@ int gb_print(Gap_buf gb, Screen sc, size_t y_origin, size_t x_origin,
          * Failure is OK, as cursor has been printed.
          */
         for (; i < gb->c + (gb->m - gb->g); ++i)
-            sub_screen_print_ch(sc, y_origin, x_origin, sub_h, sub_w,
+            sub_screen_print_ch(sc, y_origin, x_origin, text_h, sub_w,
                                 *(gb->a + i));
 
         highlight_off(sc);
@@ -767,12 +805,61 @@ int gb_print(Gap_buf gb, Screen sc, size_t y_origin, size_t x_origin,
 
     /* Failure is OK. */
     for (; i <= gb->e; ++i)
-        sub_screen_print_ch(sc, y_origin, x_origin, sub_h, sub_w,
+        sub_screen_print_ch(sc, y_origin, x_origin, text_h, sub_w,
                             *(gb->a + i));
 
-    /* Place cursor in the correct location. */
-    if (move_cursor && move(sc, y, x))
+    if (add_overflow(sub_w, 1))
         debug(return 1);
 
+    if (gb->sb_s < sub_w + 1) {
+        /* Grow status bar memory allocation. */
+        if ((t = realloc(gb->sb, sub_w + 1)) == NULL)
+            debug(return 1);
+
+        gb->sb = t;
+        gb->sb_s = sub_w + 1;
+    }
+
+    if (sb_option == INCLUDE_STATUS_BAR) {
+        /* Prepare status bar. */
+        snprintf(gb->sb, gb->sb_s, "%c %s (%" lu ", %" lu ")\n",
+                 gb->mod ? '*' : ' ', gb->fn == NULL ? "NULL" : gb->fn,
+                 gb->row, gb->col);
+
+        if (move(sc, y_origin + text_h, x_origin))
+            debug(return 1);
+
+        highlight_on(sc);
+        /*
+         * Do not check for error, as it is OK to truncate the display
+         * of the status bar.
+         */
+        sub_screen_print_str(sc, y_origin + sub_h - 1, x_origin, 1, sub_w,
+                             gb->sb);
+        highlight_off(sc);
+    }
+
+    *cursor_y = y;
+    *cursor_x = x;
+
     return 0;
+}
+
+
+const char *gb_to_str(Gap_buf gb)
+{
+    /* Only safe to use while the gap buffer is not changed. */
+
+    gb_start_of_buffer(gb);
+
+    do {
+        if (*(gb->a + gb->c) == '\0')
+            if (gb_delete_ch(gb))
+                debug(return NULL);
+    } while (!gb_right_ch(gb));
+
+    if (gb_insert_ch(gb, '\0'))
+        debug(return NULL);
+
+    return gb->a;
 }

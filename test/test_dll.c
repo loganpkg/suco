@@ -23,95 +23,92 @@
  * SUCH DAMAGE.
  */
 
-#ifdef _WIN32
-#define WIN32_LEAN_AND_MEAN
-#include <Windows.h>
-#else
-#include <unistd.h>
-#endif
-
 #include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 
-#include <alias.h>
 #include <debug.h>
-#include <screen.h>
-
-#define ALPHABET_SIZE 26
+#include <doubly_linked_list.h>
 
 
-int print_alphabet(Screen sc, int mode, int increment)
+void print_this_and_next_data(Dlln n)
 {
-    unsigned char u;
-    size_t i, j;
+    printf("n->data: %s\n", n != NULL ? (char *) n->data : "NULL");
+    printf("n->next->data: %s\n\n", n != NULL
+           && n->next != NULL ? (char *) n->next->data : "NULL");
+}
 
-    u = 'A';
-    for (i = 0; i < ALPHABET_SIZE; ++i) {
-        if (clear_screen(sc, mode))
-            debug(return 1);
 
-        for (j = 0; j <= i; j++)
-            print_ch(sc, u);
+int add_node_with_str(Dlln *n, char *str)
+{
+    size_t len;
+    char *t;
 
-        if (refresh_screen(sc))
-            debug(return 1);
+    if (str == NULL)
+        debug(return 1);
 
-        if (increment)
-            ++u;
+    len = strlen(str);
 
-        sleep(1);
+    if ((t = calloc(len + 1, sizeof(char))) == NULL)
+        debug(return 1);
+
+    memmove(t, str, len + 1);
+
+    if (dll_add_node(n, t)) {
+        free(t);
+        debug(return 1);
     }
+
+    return 0;
+}
+
+
+int custom_free(void *data)
+{
+    free(data);
     return 0;
 }
 
 
 int main(void)
 {
-    Screen sc;
+    Dlln n = NULL;
 
-    if ((sc = init_screen()) == NULL)
-        debug(return 1);
+    print_this_and_next_data(n);
 
-    sleep(2);
-
-    if (print_alphabet(sc, HARD_CLEAR, 0))
+    if (add_node_with_str(&n, "hello"))
         debug(goto error);
 
-    if (print_alphabet(sc, SOFT_CLEAR, 0))
+    print_this_and_next_data(n);
+
+    if (add_node_with_str(&n, "world"))
         debug(goto error);
 
-    if (print_alphabet(sc, HARD_CLEAR, 1))
+    print_this_and_next_data(n);
+
+    if (add_node_with_str(&n, "elephant"))
         debug(goto error);
 
-    if (print_alphabet(sc, SOFT_CLEAR, 1))
+    print_this_and_next_data(n);
+
+    if (add_node_with_str(&n, "wow"))
         debug(goto error);
 
-    highlight_on(sc);
+    print_this_and_next_data(n);
 
-    if (print_str(sc, "cool world\n"))
+    if (free_dll_node(&n, &custom_free))
         debug(goto error);
 
-    highlight_off(sc);
+    print_this_and_next_data(n);
 
-    if (print_str(sc, "\x01\x1B\n"))
+    if (add_node_with_str(&n, "goat"))
         debug(goto error);
 
-    if (move(sc, 0, 4))
-        debug(goto error);
+    print_this_and_next_data(n);
 
-    if (refresh_screen(sc))
-        debug(goto error);
-
-    sleep(1);
-
-    while (!print_str(sc, "\x05\xFF\telephant"))
-        if (refresh_screen(sc))
-            debug(goto error);
-
-    sleep(1);
-
-    return free_screen(sc);
+    return free_dll(&n, &custom_free);
 
   error:
-    free_screen(sc);
+    free_dll(&n, &custom_free);
     debug(return 1);
 }

@@ -23,95 +23,82 @@
  * SUCH DAMAGE.
  */
 
-#ifdef _WIN32
-#define WIN32_LEAN_AND_MEAN
-#include <Windows.h>
-#else
-#include <unistd.h>
-#endif
-
 #include <stdio.h>
+#include <stdlib.h>
 
-#include <alias.h>
-#include <debug.h>
-#include <screen.h>
-
-#define ALPHABET_SIZE 26
+#include "debug.h"
+#include "doubly_linked_list.h"
 
 
-int print_alphabet(Screen sc, int mode, int increment)
+int dll_add_node(Dlln *p, void *data)
 {
-    unsigned char u;
-    size_t i, j;
+    Dlln n = NULL;
 
-    u = 'A';
-    for (i = 0; i < ALPHABET_SIZE; ++i) {
-        if (clear_screen(sc, mode))
-            debug(return 1);
+    if (p == NULL)
+        debug(return 1);
 
-        for (j = 0; j <= i; j++)
-            print_ch(sc, u);
+    if ((n = calloc(1, sizeof(struct dll_node))) == NULL)
+        debug(return 1);
 
-        if (refresh_screen(sc))
-            debug(return 1);
+    n->data = data;
 
-        if (increment)
-            ++u;
-
-        sleep(1);
+    if (*p != NULL) {
+        /* Link in on the left. */
+        n->prev = (*p)->prev;
+        n->next = *p;
+        (*p)->prev = n;
+    } else {
+        n->prev = NULL;
+        n->next = NULL;
     }
+
+    /* Update pointer. */
+    *p = n;
     return 0;
 }
 
 
-int main(void)
+int free_dll_node(Dlln *p, Free_data_func fdf)
 {
-    Screen sc;
+    Dlln t = NULL;
+    int r = 0;
 
-    if ((sc = init_screen()) == NULL)
+    if (p == NULL)
         debug(return 1);
 
-    sleep(2);
+    if (*p == NULL)
+        return 0;
 
-    if (print_alphabet(sc, HARD_CLEAR, 0))
-        debug(goto error);
+    /* Link around. */
+    if ((*p)->prev != NULL) {
+        t = (*p)->prev;
+        (*p)->prev->next = (*p)->next;
+    }
 
-    if (print_alphabet(sc, SOFT_CLEAR, 0))
-        debug(goto error);
+    if ((*p)->next != NULL) {
+        if (t == NULL)
+            t = (*p)->next;
 
-    if (print_alphabet(sc, HARD_CLEAR, 1))
-        debug(goto error);
+        (*p)->next->prev = (*p)->prev;
+    }
 
-    if (print_alphabet(sc, SOFT_CLEAR, 1))
-        debug(goto error);
+    r = (*fdf) ((*p)->data);
 
-    highlight_on(sc);
+    free(*p);
+    *p = t;
+    return r;
+}
 
-    if (print_str(sc, "cool world\n"))
-        debug(goto error);
 
-    highlight_off(sc);
+int free_dll(Dlln *p, Free_data_func fdf)
+{
+    int r = 0;
+    if (p == NULL)
+        debug(return 1);
 
-    if (print_str(sc, "\x01\x1B\n"))
-        debug(goto error);
+    while (*p != NULL)
+        if (free_dll_node(p, fdf))
+            r = 1;
 
-    if (move(sc, 0, 4))
-        debug(goto error);
-
-    if (refresh_screen(sc))
-        debug(goto error);
-
-    sleep(1);
-
-    while (!print_str(sc, "\x05\xFF\telephant"))
-        if (refresh_screen(sc))
-            debug(goto error);
-
-    sleep(1);
-
-    return free_screen(sc);
-
-  error:
-    free_screen(sc);
-    debug(return 1);
+    return r;
 }

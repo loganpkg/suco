@@ -29,7 +29,20 @@ set -e
 set -u
 set -x
 
-c_ops='-ansi -g -O0 -Wall -Wextra -pedantic -DDEBUG'
+
+# Configuration.
+c_ops='-ansi -g -O0 -Wall -Wextra -pedantic -I. -DDEBUG'
+indent_ops='-kr -nut -l79'
+
+export c_ops
+
+wd=$(pwd)
+export wd
+
+build_dir=$(mktemp -d)
+error_file="$build_dir"/error_file
+export error_file
+
 
 typedefs=$(grep -r --exclude-dir='.git' -E typedef \
     | grep -E -o '[a-zA-Z_]+;$' \
@@ -37,22 +50,37 @@ typedefs=$(grep -r --exclude-dir='.git' -E typedef \
     | tr '\n' ' ' \
     | sed -E 's/ +$//')
 
-indent_ops='-kr -nut -l79 '"$typedefs"
+indent_ops="$indent_ops $typedefs"
 export indent_ops
+
 
 build_c() {
     # shellcheck disable=SC2086
-    find . -type f -name '*.h' -exec cc -c $c_ops '{}' \;
-    # shellcheck disable=SC2086
-    find . -type f -name '*.c' -exec cc -c $c_ops '{}' \;
+    find . -type f \( -name '*.h' -o -name '*.c' \) -exec sh -c '
+        set -e
+        set -u
+        set -x
+        fn="$1"
+        # shellcheck disable=SC2086
+        if ! cc -c $c_ops "$fn"
+        then
+            printf "%s: ERROR: cc failed: %s\n" "$0" "$fn" \
+                >> "$error_file"
+        fi
+    ' sh '{}' \;
 }
 
 
-wd=$(pwd)
-export wd
-build_dir=$(mktemp -d)
-error_file="$build_dir"/error_file
-export error_file
+exit_if_error() {
+    if [ -s "$error_file" ]
+    then
+        printf "%s: Error file:\n" "$0" 1>&2
+        cat "$error_file" 1>&2
+        exit 1
+    fi
+}
+
+
 
 
 # Copy files to build directory.
@@ -62,6 +90,8 @@ cd "$build_dir" || exit 1
 
 find . -type f -name '*.sh' -exec sh -c \
     'fn="$1"; shellcheck "$1" >> "$error_file"' 'sh' '{}' \;
+
+exit_if_error
 
 # Update header files.
 find . -type f -name '*.h' -exec sh -c '
@@ -84,7 +114,11 @@ find . -type f -name '*.h' -exec sh -c '
         fi
         head -n "$line_num" "$fn" > "$fn"~
         # shellcheck disable=SC2086
-        indent $indent_ops "$c_fn"
+        if ! indent $indent_ops "$c_fn"
+        then
+            printf "%s: ERROR: indent failed: %s\n" "$0" "$c_fn" \
+                >> "$error_file"
+        fi
         {
             grep -E -v -e "^(static |typedef )" -e ":" "$c_fn" \
                 | tr -d "~" | tr "\n" "~" \
@@ -96,44 +130,43 @@ find . -type f -name '*.h' -exec sh -c '
         mv "$fn"~ "$fn"
     ' sh '{}' \;
 
-if [ -s "$error_file" ]
-then
-    cat "$error_file"
-    exit 1
-fi
+exit_if_error
 
 build_c
+
+exit_if_error
 
 # shellcheck disable=SC2086
-find . -type f \( -name '*.h' -o -name '*.c' \) -exec sh -c '
-    set -e
-    set -u
-    set -x
-    fn="$1"
-    # shellcheck disable=SC2086
-    indent $indent_ops "$fn"
-    ' sh '{}' \;
-
-# Clean up.
-find . -type f -name '*~' -delete
-
-# Check for long lines.
-if grep -r -I --exclude-dir='.git' -E '.{80}'
-then
-    printf '%s: ERROR: Long lines.\n' "$0"
-    exit 1
-fi
-
-build_c
-
-# Move C files back.
 find . -type f \( -name '*.h' -o -name '*.c' \) -exec sh -c '
         set -e
         set -u
         set -x
         fn="$1"
-        mv "$fn" "$wd/$fn"
+        # shellcheck disable=SC2086
+        if ! indent $indent_ops "$fn"
+        then
+            printf "%s: ERROR: indent failed: %s\n" "$0" "$fn" \
+                >> "$error_file"
+        fi
     ' sh '{}' \;
+
+exit_if_error
+
+# Clean up.
+find . -type f -name '*~' -delete
+
+# Check for long lines.
+if grep -r -I --exclude-dir='.git' -E '.{80}' >> "$error_file"
+then
+    printf '%s: ERROR: Long lines.\n' "$0" >> "$error_file"
+    exit 1
+fi
+
+exit_if_error
+
+build_c
+
+exit_if_error
 
 # shellcheck disable=SC2086
 cc $c_ops test_buf.o buf.o int.o -o test/test_buf
@@ -146,14 +179,31 @@ cc $c_ops test_gap_buf.o gap_buf.o screen.o input.o buf.o int.o \
     -o test/test_gap_buf
 
 # shellcheck disable=SC2086
+cc $c_ops test_dll.o doubly_linked_list.o \
+    -o test/test_dll
+
+# shellcheck disable=SC2086
 cc $c_ops suco.o gap_buf.o screen.o input.o buf.o int.o -o suco
 
+
+# Move source code back.
+find . -type f \( -name '*.h' -o -name '*.c' \) -exec sh -c '
+        set -e
+        set -u
+        set -x
+        fn="$1"
+        mv "$fn" "$wd/$fn"
+    ' sh '{}' \;
+
+
+# Move executables.
 valgrind ./test/test_buf
 # valgrind ./test/test_input
 mv test/test_buf "$wd"/test/test_buf
 mv test/test_input "$wd"/test/test_input
 mv test/test_screen "$wd"/test/test_screen
 mv test/test_gap_buf "$wd"/test/test_gap_buf
+mv test/test_dll "$wd"/test/test_dll
 mv suco "$wd"/suco
 
 cp safe_vc.sh "$HOME"/bin/git

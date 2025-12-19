@@ -26,13 +26,14 @@
 #include <stdio.h>
 
 #ifdef _WIN32
+#define WIN32_LEAN_AND_MEAN
 #include <Windows.h>
 #else
 #include <unistd.h>
 #endif
 
-#include "../alias.h"
-#include "../input.h"
+#include <alias.h>
+#include <input.h>
 
 
 int main(void)

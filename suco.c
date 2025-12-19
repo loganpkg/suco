@@ -30,16 +30,13 @@
 
 #include "buf.h"
 #include "debug.h"
+#include "doubly_linked_list.c"
 #include "gap_buf.h"
 #include "input.h"
 #include "screen.h"
 
 
-#define INIT_NUM_GB_BUF_ELEMENTS 12
 #define INIT_NUM_GB_ELEMENTS 512
-
-#define MIN_SCREEN_HEIGHT 3
-#define NUM_NON_TEXT_SCREEN_ROWS 2
 
 
 /* This moves the command identifiers beyond the normal cooked key range. */
@@ -52,11 +49,40 @@
 #define ID (CMD_ID_OFFSET + CMD_COUNTER)
 
 
+/* Split types: */
+#define NO_SPLIT 1
+#define VERTICAL_SPLIT 2
+#define HORIZONTAL_SPLIT 4
+
+
+/* Operation. 0 means no operation. */
+#define ED_RENAME 1
+
+
+/* Current gap buffer, excluding the cl. */
+#define c_gb (ed->view_2 ? ed->n_2->data : ed->n->data)
+
+/* Active gap buffer, including the cl. */
+#define a_gb (ed->cl_a ? ed->cl : c_gb)
+
+
+    /*
+     * full_clear:
+     * 0 is the default, which does a soft clear of the sub screen,
+     *     not the full screen.
+     * SOFT_CLEAR is set when split or active buffer changes.
+     * HARD_CLEAR is used when requested.
+     */
 struct editor {
-    /* Buffer of gap buffers. The command line gap buffer is element 0. */
-    Buf gb_buf;
-    size_t active_gb_i;         /* Index into gb_buf to the active gb. */
-    Gap_buf active_gb;          /* Shortcut. Do not free. */
+    /* n and n_2 are nodes of a doubly linked list of gap buffers. */
+    Dlln n;                     /* Left or top view. */
+    Dlln n_2;                   /* Right or bottom view. Do not free. */
+    int split;                  /* Split type. */
+    int full_clear;
+    int view_2;                 /* n_2 is in use (cl_a could be set too). */
+    Gap_buf cl;                 /* Command line gap buffer. */
+    int cl_a;                   /* Command line is active. */
+    int operation;              /* The operation that using the cl. */
     Input ip;
     int ch;                     /* Read character. */
     Screen sc;
@@ -69,33 +95,22 @@ typedef struct editor *Editor;
 typedef void (*Ed_func)(Editor);
 
 
-int set_active_gb(Editor ed, size_t new_active_gb_i)
+int free_dll_node_data(void *data)
 {
-    Gap_buf *gb_p;
-
-    if (new_active_gb_i >= buf_num_used_elements(ed->gb_buf))
-        debug(return 1);
-
-    if ((gb_p = get_buf_element(ed->gb_buf, new_active_gb_i)) == NULL)
-        debug(return 1);
-
-    ed->active_gb = *gb_p;
-    ed->active_gb_i = new_active_gb_i;
-
+    free_gap_buf(data);
     return 0;
 }
 
 
 int free_editor(Editor ed)
 {
-    Gap_buf gb;
     int r = 0;
 
     if (ed != NULL) {
-        while (pop(ed->gb_buf, &gb) == 0)
-            free_gap_buf(gb);
+        if (free_dll(&ed->n, &free_dll_node_data))
+            debug(r = 1);
 
-        free_buf(ed->gb_buf);
+        free_gap_buf(ed->cl);
 
         if (free_input(ed->ip))
             debug(r = 1);
@@ -116,12 +131,15 @@ Editor init_editor(const struct key_map *km)
     if ((ed = calloc(1, sizeof(struct editor))) == NULL)
         debug(goto error);
 
-    ed->gb_buf = NULL;
+    ed->n = NULL;
+    ed->n_2 = NULL;
+    ed->split = NO_SPLIT;
+    ed->full_clear = SOFT_CLEAR;
+    ed->cl = NULL;
     ed->ip = NULL;
     ed->sc = NULL;
 
-    if ((ed->gb_buf =
-         init_buf(INIT_NUM_GB_BUF_ELEMENTS, sizeof(Gap_buf))) == NULL)
+    if ((ed->cl = init_gap_buf(INIT_NUM_GB_ELEMENTS)) == NULL)
         debug(goto error);
 
     if ((ed->ip = init_input_stdin(BLOCKING, DOUBLE_COOKED, km)) == NULL)
@@ -155,7 +173,7 @@ int add_gap_buf(Editor ed, const char *fn)
             debug(goto error);
     }
 
-    if (push(ed->gb_buf, &gb))
+    if (dll_add_node(&ed->n, gb))
         debug(goto error);
 
     return 0;
@@ -168,24 +186,105 @@ int add_gap_buf(Editor ed, const char *fn)
 
 int draw_screen(Editor ed)
 {
-    Gap_buf gb = ed->active_gb;
-    size_t h, w;
+    size_t h, w, y = 0, x = 0, y_2 = 0, x_2 = 0, cl_y = 0, cl_x = 0;
+
+    if (ed->full_clear)
+        if (clear_screen(ed->sc, ed->full_clear))
+            debug(return 1);
 
     h = get_screen_height(ed->sc);
     w = get_screen_width(ed->sc);
 
-    if (h < MIN_SCREEN_HEIGHT)
+    /* Check the minimum screen height. */
+    if ((ed->split == HORIZONTAL_SPLIT && h < 5) || h < 3)
         debug(return 1);
 
-    if (clear_screen(ed->sc, SOFT_CLEAR))
-        debug(return 1);
+    switch (ed->split) {
+    case NO_SPLIT:
+        if (ed->full_clear || !ed->cl_a) {
+            if (!ed->full_clear)
+                if (soft_clear_sub_screen(ed->sc, 0, 0, h - 1, w))
+                    debug(return 1);
 
-    if (gb_print
-        (gb, ed->sc, 0, 0 + 20, h - NUM_NON_TEXT_SCREEN_ROWS, w - 20 - 20, 1))
+            if (gb_print
+                (ed->n->data, ed->sc, 0, 0, h - 1, w, INCLUDE_STATUS_BAR, &y,
+                 &x))
+                debug(return 1);
+        }
+
+        break;
+    case VERTICAL_SPLIT:
+        if (ed->full_clear || (!ed->cl_a && !ed->view_2)) {
+            if (!ed->full_clear)
+                if (soft_clear_sub_screen(ed->sc, 0, 0, h - 1, w / 2))
+                    debug(return 1);
+
+            if (gb_print
+                (ed->n->data, ed->sc, 0, 0, h - 1, w / 2, INCLUDE_STATUS_BAR,
+                 &y, &x))
+                debug(return 1);
+        }
+
+        if (ed->full_clear || (!ed->cl_a && ed->view_2)) {
+            if (!ed->full_clear)
+                if (soft_clear_sub_screen(ed->sc, 0, w / 2, h - 1, w / 2))
+                    debug(return 1);
+
+            if (gb_print
+                (ed->n_2->data, ed->sc, 0, w / 2, h - 1, w / 2,
+                 INCLUDE_STATUS_BAR, &y_2, &x_2))
+                debug(return 1);
+        }
+
+        break;
+    case HORIZONTAL_SPLIT:
+        if (ed->full_clear || (!ed->cl_a && !ed->view_2)) {
+            if (!ed->full_clear)
+                if (soft_clear_sub_screen(ed->sc, 0, 0, h / 2, w))
+                    debug(return 1);
+
+            if (gb_print
+                (ed->n->data, ed->sc, 0, 0, h / 2, w, INCLUDE_STATUS_BAR, &y,
+                 &x))
+                debug(return 1);
+        }
+
+        if (ed->full_clear || (!ed->cl_a && ed->view_2)) {
+            if (!ed->full_clear)
+                if (soft_clear_sub_screen
+                    (ed->sc, h / 2, 0, h % 2 ? h / 2 : h / 2 - 1, w))
+                    debug(return 1);
+
+            if (gb_print
+                (ed->n_2->data, ed->sc, h / 2, 0, h % 2 ? h / 2 : h / 2 - 1, w,
+                 INCLUDE_STATUS_BAR, &y_2, &x_2))
+                debug(return 1);
+        }
+
+        break;
+    default:
+        debug(return 1);        /* Invalid split type. */
+    }
+
+    if (ed->full_clear || ed->cl_a) {
+        if (!ed->full_clear)
+            if (soft_clear_sub_screen(ed->sc, h - 1, 0, 1, w))
+                debug(return 1);
+
+        if (gb_print
+            (ed->cl, ed->sc, h - 1, 0, 1, w, EXCLUDE_STATUS_BAR, &cl_y, &cl_x))
+            debug(return 1);
+    }
+
+    /* Position cursor on the display. */
+    if (move(ed->sc, ed->cl_a ? cl_y : (ed->view_2 ? y_2 : y),
+             ed->cl_a ? cl_x : (ed->view_2 ? x_2 : x)))
         debug(return 1);
 
     if (refresh_screen(ed->sc))
         debug(return 1);
+
+    ed->full_clear = 0;
 
     return 0;
 }
@@ -193,43 +292,43 @@ int draw_screen(Editor ed)
 
 void ed_delete_ch(Editor ed)
 {
-    ed->rv = gb_delete_ch(ed->active_gb);
+    ed->rv = gb_delete_ch(a_gb);
 }
 
 
 void ed_left_ch(Editor ed)
 {
-    ed->rv = gb_left_ch(ed->active_gb);
+    ed->rv = gb_left_ch(a_gb);
 }
 
 
 void ed_right_ch(Editor ed)
 {
-    ed->rv = gb_right_ch(ed->active_gb);
+    ed->rv = gb_right_ch(a_gb);
 }
 
 
 void ed_undo(Editor ed)
 {
-    ed->rv = gb_undo(ed->active_gb);
+    ed->rv = gb_undo(a_gb);
 }
 
 
 void ed_redo(Editor ed)
 {
-    ed->rv = gb_redo(ed->active_gb);
+    ed->rv = gb_redo(a_gb);
 }
 
 
 void ed_start_of_line(Editor ed)
 {
-    gb_start_of_line(ed->active_gb);
+    gb_start_of_line(a_gb);
 }
 
 
 void ed_end_of_line(Editor ed)
 {
-    gb_end_of_line(ed->active_gb);
+    gb_end_of_line(a_gb);
 }
 
 
@@ -241,36 +340,103 @@ void ed_close(Editor ed)
 
 void ed_left_gb(Editor ed)
 {
-    if (!ed->active_gb_i)       /* Already at the first gap buffer. */
-        ed->rv = 1;
-    else if (set_active_gb(ed, ed->active_gb_i - 1))
-        ed->rv = 1;
+    if (ed->n->prev != NULL)
+        ed->n = ed->n->prev;
 }
 
 
 void ed_right_gb(Editor ed)
 {
-    if (set_active_gb(ed, ed->active_gb_i + 1))
-        ed->rv = 1;
-}
-
-
-void ed_goto_gb(Editor ed)
-{
-    if (set_active_gb(ed, ed->ch - CMD_ID_OFFSET))
-        ed->rv = 1;
+    if (ed->n->next != NULL)
+        ed->n = ed->n->next;
 }
 
 
 void ed_set_mark(Editor ed)
 {
-    gb_set_mark(ed->active_gb);
+    gb_set_mark(a_gb);
 }
 
 
 void ed_centre(Editor ed)
 {
-    gb_request_centring(ed->active_gb);
+    gb_request_centring(a_gb);
+    ed->full_clear = HARD_CLEAR;        /* Complete redraw. */
+}
+
+
+void ed_rename(Editor ed)
+{
+    ed->cl_a = 1;
+    ed->operation = ED_RENAME;
+}
+
+
+void process_cl_operation(Editor ed)
+{
+    const char *cl_str;
+
+    if ((cl_str = gb_to_str(ed->cl)) == NULL) {
+        debug(ed->rv = 1);
+        return;
+    }
+
+    switch (ed->operation) {
+    case ED_RENAME:
+        ed->rv = gb_set_fn(c_gb, cl_str);
+        break;
+    default:
+        ed->rv = 1;             /* Invalid operation. */
+        return;
+    }
+    ed->operation = 0;
+    ed->cl_a = 0;
+}
+
+
+void ed_toggle_split(Editor ed)
+{
+    if (ed->split == NO_SPLIT) {
+        if (ed->n->next != NULL) {
+            ed->n_2 = ed->n->next;
+        } else if (ed->n->prev != NULL) {
+            ed->n_2 = ed->n->prev;
+        } else {
+            /*
+             * New nodes are linked in on the left,
+             * and n is updated automatically,
+             * so n_2 will be the next.
+             */
+            if (add_gap_buf(ed, NULL))
+                debug(ed->rv = 1);
+
+            ed->n_2 = ed->n;
+            ed->n = ed->n->next;
+        }
+        ed->split = VERTICAL_SPLIT;
+    } else if (ed->split == VERTICAL_SPLIT) {
+        ed->split = HORIZONTAL_SPLIT;
+    } else {
+        if (ed->view_2)
+            ed->n = ed->n_2;
+
+        ed->n_2 = NULL;
+        ed->view_2 = 0;
+        ed->split = NO_SPLIT;
+    }
+
+    ed->full_clear = SOFT_CLEAR;
+}
+
+
+void ed_toggle_view(Editor ed)
+{
+    if (ed->n_2 == NULL)
+        return;
+    if (ed->view_2)
+        ed->view_2 = 0;
+    else
+        ed->view_2 = 1;
 }
 
 
@@ -280,18 +446,6 @@ int main(int argc, char **argv)
     int i;
 
     const struct key_map km[] = {
-        { { KEY_F1}, ID },
-        { { KEY_F2}, ID },
-        { { KEY_F3}, ID },
-        { { KEY_F4}, ID },
-        { { KEY_F5}, ID },
-        { { KEY_F6}, ID },
-        { { KEY_F7}, ID },
-        { { KEY_F8}, ID },
-        { { KEY_F9}, ID },
-        { { KEY_F10}, ID },
-        { { KEY_F11}, ID },
-        { { KEY_F12}, ID },
         { { CTRL_D}, ID },
         { { KEY_DELETE}, ID },
         { { CTRL_B}, ID },
@@ -306,25 +460,18 @@ int main(int argc, char **argv)
         { { KEY_END}, ID },
         { { CTRL_X, CTRL_C}, ID },
         { { CTRL_X, KEY_LEFT}, ID },
+        { { CTRL_LEFT}, ID },
         { { CTRL_X, KEY_RIGHT}, ID },
+        { { CTRL_RIGHT}, ID },
         { { 0}, ID },
         { { CTRL_L}, ID },
+        { { ESC, '/'}, ID },
+        { { ESC, 's'}, ID },
+        { { ESC, 'v'}, ID },
         { { 0}, 0 }
     };
 
     const Ed_func edf[] = {
-        &ed_goto_gb,
-        &ed_goto_gb,
-        &ed_goto_gb,
-        &ed_goto_gb,
-        &ed_goto_gb,
-        &ed_goto_gb,
-        &ed_goto_gb,
-        &ed_goto_gb,
-        &ed_goto_gb,
-        &ed_goto_gb,
-        &ed_goto_gb,
-        &ed_goto_gb,
         &ed_delete_ch,
         &ed_delete_ch,
         &ed_left_ch,
@@ -339,25 +486,28 @@ int main(int argc, char **argv)
         &ed_end_of_line,
         &ed_close,
         &ed_left_gb,
+        &ed_left_gb,
+        &ed_right_gb,
         &ed_right_gb,
         &ed_set_mark,
-        &ed_centre
+        &ed_centre,
+        &ed_rename,
+        &ed_toggle_split,
+        &ed_toggle_view
     };
 
     if ((ed = init_editor(km)) == NULL)
         debug(goto error);
 
     if (argc > 1) {
-        for (i = 1; i < argc; ++i)
+        /* Do backwards, as nodes are linked in on the left. */
+        for (i = argc - 1; i >= 1; --i)
             if (add_gap_buf(ed, *(argv + i)))
                 debug(goto error);
     } else {
         if (add_gap_buf(ed, NULL))
             debug(goto error);
     }
-
-    if (set_active_gb(ed, 0))
-        debug(goto error);
 
     while (ed->running) {
         if (draw_screen(ed))
@@ -377,9 +527,11 @@ int main(int argc, char **argv)
 
         if (ed->ch >= CMD_ID_OFFSET)
             (*edf[ed->ch - CMD_ID_OFFSET]) (ed);
+        else if (ed->ch == '\n' && ed->cl_a)
+            process_cl_operation(ed);
         else if (ed->ch <= UCHAR_MAX
                  && (isprint(ed->ch) || ed->ch == '\t' || ed->ch == '\n')
-                 && gb_insert_ch(ed->active_gb, ed->ch))
+                 && gb_insert_ch(a_gb, (char) ed->ch))
             debug(goto error);
     }
 

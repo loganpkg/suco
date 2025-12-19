@@ -30,6 +30,11 @@
 
 #include "screen.h"
 
+
+#define INCLUDE_STATUS_BAR 1
+#define EXCLUDE_STATUS_BAR 2
+
+
 typedef struct gap_buf *Gap_buf;
 
 
@@ -60,11 +65,18 @@ void gb_start_of_line(Gap_buf gb);
 
 void gb_end_of_line(Gap_buf gb);
 
+void gb_start_of_buffer(Gap_buf gb);
+
+void gb_end_of_buffer(Gap_buf gb);
+
 void gb_set_mark(Gap_buf gb);
 
 void gb_request_centring(Gap_buf gb);
 
 int gb_print(Gap_buf gb, Screen sc, size_t y_origin, size_t x_origin,
-             size_t sub_h, size_t sub_w, int move_cursor);
+             size_t sub_h, size_t sub_w, int sb_option, size_t *cursor_y,
+             size_t *cursor_x);
+
+const char *gb_to_str(Gap_buf gb);
 
 #endif

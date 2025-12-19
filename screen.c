@@ -29,6 +29,7 @@
 
 
 #ifdef _WIN32
+#define WIN32_LEAN_AND_MEAN
 #include <Windows.h>
 #else
 #include <sys/ioctl.h>
@@ -60,7 +61,7 @@
  * This macro evaluates y and x multiple times.
  */
 #define es_move(sc, y, x) do { \
-    printf("\x1B[%lu;%luH", (size_t) (y) + 1, (size_t) (x) + 1); \
+    printf("\x1B[%" lu ";%" lu "H", (size_t) (y) + 1, (size_t) (x) + 1); \
     (sc)->s_y = (y); \
     (sc)->s_x = (x); \
 } while (0)
@@ -206,7 +207,6 @@ int free_screen(Screen sc)
 Screen init_screen(void)
 {
 #ifdef _WIN32
-    HANDLE console_handle;
     DWORD mode;
 #endif
     Screen sc = NULL;
@@ -270,9 +270,19 @@ Screen init_screen(void)
 } while (0)
 
 
-int print_ch(Screen sc, char ch)
+int soft_clear_sub_screen(Screen sc, size_t y_origin, size_t x_origin,
+                          size_t sub_h, size_t sub_w)
 {
-    return sub_screen_print_ch(sc, 0, 0, sc->h, sc->w, ch);
+    size_t row_i;
+
+    /* Validate sub screen. */
+    if (y_origin + sub_h > sc->h || x_origin + sub_w > sc->w)
+        debug(return 1);
+
+    for (row_i = y_origin; row_i < y_origin + sub_h; ++row_i)
+        memset(sc->next_mem + row_i * sc->w + x_origin, ' ', sub_w);
+
+    return 0;
 }
 
 
@@ -288,6 +298,10 @@ int sub_screen_print_ch(Screen sc, size_t y_origin, size_t x_origin,
      * of bounds.
      */
     size_t j, y_old;
+
+    /* Validate sub screen. */
+    if (y_origin + sub_h > sc->h || x_origin + sub_w > sc->w)
+        debug(return 1);
 
     /* Check if out of bounds. If not, first char will be printed. */
     if (sc->y >= y_origin + sub_h || sc->x >= x_origin + sub_w)
@@ -318,17 +332,31 @@ int sub_screen_print_ch(Screen sc, size_t y_origin, size_t x_origin,
 #undef add_ch
 
 
-int print_str(Screen sc, const char *str)
+int sub_screen_print_str(Screen sc, size_t y_origin, size_t x_origin,
+                         size_t sub_h, size_t sub_w, const char *str)
 {
-    const char *p;
     char ch;
 
-    p = str;
-    while ((ch = *p++))
-        if (print_ch(sc, ch))
+    if (str == NULL)
+        debug(return 1);
+
+    while ((ch = *str++))
+        if (sub_screen_print_ch(sc, y_origin, x_origin, sub_h, sub_w, ch))
             debug(return 1);
 
     return 0;
+}
+
+
+int print_ch(Screen sc, char ch)
+{
+    return sub_screen_print_ch(sc, 0, 0, sc->h, sc->w, ch);
+}
+
+
+int print_str(Screen sc, const char *str)
+{
+    return sub_screen_print_str(sc, 0, 0, sc->h, sc->w, str);
 }
 
 

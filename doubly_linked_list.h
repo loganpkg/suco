@@ -23,52 +23,29 @@
  * SUCH DAMAGE.
  */
 
-#include <stdio.h>
-
-#include <buf.h>
-#include <debug.h>
+#ifndef DOUBLY_LINKED_LIST_H
+#define DOUBLY_LINKED_LIST_H
 
 
-#define INIT_NUM_ELEMENTS 1
-#define ELEMENT_SIZE 10
+/* Doubly linked list node. */
+typedef struct dll_node *Dlln;
 
 
-int main(void)
-{
-    Buf b = NULL;
-    char str[ELEMENT_SIZE];
+struct dll_node {
+    void *data;
+    Dlln prev;
+    Dlln next;
+};
 
-    if ((b = init_buf(INIT_NUM_ELEMENTS, ELEMENT_SIZE)) == NULL)
-        debug(goto error);
 
-    if (push(b, "cool"))
-        debug(goto error);
+typedef int (*Free_data_func)(void *);
 
-    if (push(b, "elephant!"))
-        debug(goto error);
 
-    if (push(b, "whale"))
-        debug(goto error);
+/* Function declarations */
+int dll_add_node(Dlln *p, void *data);
 
-    if (pop(b, str))
-        debug(goto error);
+int free_dll_node(Dlln *p, Free_data_func fdf);
 
-    printf("%s\n", str);
+int free_dll(Dlln *p, Free_data_func fdf);
 
-    if (pop(b, str))
-        debug(goto error);
-
-    printf("%s\n", str);
-
-    if (pop(b, str))
-        debug(goto error);
-
-    printf("%s\n", str);
-
-    free_buf(b);
-    return 0;
-
-  error:
-    free_buf(b);
-    debug(return 1);
-}
+#endif
