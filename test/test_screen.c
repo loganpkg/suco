@@ -19,6 +19,7 @@
  */
 
 #ifdef _WIN32
+#define WIN32_LEAN_AND_MEAN
 #include <Windows.h>
 #else
 #include <unistd.h>
@@ -26,9 +27,9 @@
 
 #include <stdio.h>
 
-#include "../alias.h"
-#include "../debug.h"
-#include "../screen.h"
+#include <alias.h>
+#include <debug.h>
+#include <screen.h>
 
 #define ALPHABET_SIZE 26
 
