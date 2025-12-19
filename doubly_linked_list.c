@@ -26,22 +26,82 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#ifndef ALIAS_H
-#define ALIAS_H
+#include <stdio.h>
+#include <stdlib.h>
+
+#include "debug.h"
+#include "doubly_linked_list.h"
 
 
-#ifdef _WIN32
-#define fileno _fileno
-#define isatty _isatty
-#define sleep(sec) Sleep((sec) * 1000)
-/* For size_t. */
-#define lu "zu"
-#else
-#define lu "lu"
-#endif
+int dll_add_node(Dlln *p, void *data)
+{
+    Dlln n = NULL;
 
-extern int dummy;
+    if (p == NULL)
+        debug(return 1);
 
-/* Function declarations */
+    if ((n = calloc(1, sizeof(struct dll_node))) == NULL)
+        debug(return 1);
 
-#endif
+    n->data = data;
+
+    if (*p != NULL) {
+        /* Link in on the left. */
+        n->prev = (*p)->prev;
+        n->next = *p;
+        (*p)->prev = n;
+    } else {
+        n->prev = NULL;
+        n->next = NULL;
+    }
+
+    /* Update pointer. */
+    *p = n;
+    return 0;
+}
+
+
+int free_dll_node(Dlln *p, Free_data_func fdf)
+{
+    Dlln t = NULL;
+    int r = 0;
+
+    if (p == NULL)
+        debug(return 1);
+
+    if (*p == NULL)
+        return 0;
+
+    /* Link around. */
+    if ((*p)->prev != NULL) {
+        t = (*p)->prev;
+        (*p)->prev->next = (*p)->next;
+    }
+
+    if ((*p)->next != NULL) {
+        if (t == NULL)
+            t = (*p)->next;
+
+        (*p)->next->prev = (*p)->prev;
+    }
+
+    r = (*fdf) ((*p)->data);
+
+    free(*p);
+    *p = t;
+    return r;
+}
+
+
+int free_dll(Dlln *p, Free_data_func fdf)
+{
+    int r = 0;
+    if (p == NULL)
+        debug(return 1);
+
+    while (*p != NULL)
+        if (free_dll_node(p, fdf))
+            r = 1;
+
+    return r;
+}

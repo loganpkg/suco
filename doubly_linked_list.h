@@ -26,22 +26,29 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#ifndef ALIAS_H
-#define ALIAS_H
+#ifndef DOUBLY_LINKED_LIST_H
+#define DOUBLY_LINKED_LIST_H
 
 
-#ifdef _WIN32
-#define fileno _fileno
-#define isatty _isatty
-#define sleep(sec) Sleep((sec) * 1000)
-/* For size_t. */
-#define lu "zu"
-#else
-#define lu "lu"
-#endif
+/* Doubly linked list node. */
+typedef struct dll_node *Dlln;
 
-extern int dummy;
+
+struct dll_node {
+    void *data;
+    Dlln prev;
+    Dlln next;
+};
+
+
+typedef int (*Free_data_func)(void *);
+
 
 /* Function declarations */
+int dll_add_node(Dlln *p, void *data);
+
+int free_dll_node(Dlln *p, Free_data_func fdf);
+
+int free_dll(Dlln *p, Free_data_func fdf);
 
 #endif

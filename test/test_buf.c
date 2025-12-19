@@ -28,8 +28,8 @@
 
 #include <stdio.h>
 
-#include "../buf.h"
-#include "../debug.h"
+#include <buf.h>
+#include <debug.h>
 
 
 #define INIT_NUM_ELEMENTS 1
