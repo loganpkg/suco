@@ -81,6 +81,17 @@ exit_if_error() {
 }
 
 
+fix_perms() {
+    find . -type f ! -path '*.git/*' -exec chmod 600 '{}' \;
+    find . -type d ! -path '*.git/*' -exec chmod 700 '{}' \;
+
+    find . -type f ! -path '*.git/*' \
+        \( -name '*.sh' -o -name '*.exp' -o -name '*.cmd' \) \
+        -exec chmod 700 '{}' \;
+}
+
+
+fix_perms
 
 
 # Copy files to build directory.
@@ -194,6 +205,11 @@ find . -type f \( -name '*.h' -o -name '*.c' \) -exec sh -c '
         fn="$1"
         mv "$fn" "$wd/$fn"
     ' sh '{}' \;
+
+
+cd "$wd" || exit 1
+fix_perms
+cd "$build_dir" || exit 1
 
 
 # Move executables.
