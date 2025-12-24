@@ -222,4 +222,4 @@ mv test/test_gap_buf "$wd"/test/test_gap_buf
 mv test/test_dll "$wd"/test/test_dll
 mv suco "$wd"/suco
 
-cp safe_vc.sh "$HOME"/bin/git
+cp safe_vc.sh "$HOME"/bin/safe_vc
