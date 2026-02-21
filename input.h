@@ -27,7 +27,7 @@
 #define INPUT_H
 
 /* blocking: */
-#define BLOCKING 1
+#define BLOCKING         1
 #define NON_BLOCKING_TTY 2
 
 /* cooking: */
@@ -45,7 +45,6 @@
 
 /* Escape: */
 #define ESC 0x1B
-
 
 /* Control characters: */
 #define CTRL_A 0x01
@@ -74,7 +73,6 @@
 #define CTRL_X 0x18
 #define CTRL_Y 0x19
 #define CTRL_Z 0x1A
-
 
 /* Cooked keyboard keys: */
 #define KEY_BACKSPACE 0x0100
@@ -114,18 +112,16 @@ struct key_map {
     int key;
 };
 
-
 typedef struct input *Input;
-
 
 /* Function declarations */
 int free_input(Input ip);
 
-Input init_input_stdin(int blocking, int cooking,
-                       const struct key_map *second_level_km);
+Input init_input_stdin(
+    int blocking, int cooking, const struct key_map *second_level_km);
 
 Input init_input_fn(const char *fn, int blocking, int cooking,
-                    const struct key_map *second_level_km);
+    const struct key_map *second_level_km);
 
 int get_ch(Input ip, int *ch);
 

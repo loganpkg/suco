@@ -31,14 +31,12 @@
 #include "debug.h"
 #include "int.h"
 
-
 struct buf {
-    char *a;                    /* Memory. */
-    size_t i;                   /* Index of next unused element. */
-    size_t n;                   /* Number of elements allocated. */
-    size_t es;                  /* Element size. */
+    char *a;   /* Memory. */
+    size_t i;  /* Index of next unused element. */
+    size_t n;  /* Number of elements allocated. */
+    size_t es; /* Element size. */
 };
-
 
 void free_buf(Buf b)
 {
@@ -47,7 +45,6 @@ void free_buf(Buf b)
         free(b);
     }
 }
-
 
 Buf init_buf(size_t init_num_elements, size_t element_size)
 {
@@ -59,7 +56,7 @@ Buf init_buf(size_t init_num_elements, size_t element_size)
     if ((b = calloc(1, sizeof(struct buf))) == NULL)
         debug(goto error);
 
-    b->a = NULL;                /* Do not assume that NULL is zero. */
+    b->a = NULL; /* Do not assume that NULL is zero. */
 
     if (mult_overflow(init_num_elements, element_size))
         debug(goto error);
@@ -72,11 +69,10 @@ Buf init_buf(size_t init_num_elements, size_t element_size)
 
     return b;
 
-  error:
+error:
     free_buf(b);
     debug(return NULL);
 }
-
 
 int push(Buf b, void *object)
 {
@@ -106,29 +102,26 @@ int push(Buf b, void *object)
     return 0;
 }
 
-
 int pop(Buf b, void *result)
 {
     if (!b->i)
-        return 1;               /* Only returns 1 when empty. */
+        return 1; /* Only returns 1 when empty. */
 
     memmove(result, b->a + --b->i * b->es, b->es);
 
     return 0;
 }
 
-
 void truncate_buf(Buf b)
 {
     b->i = 0;
 }
 
-
 void *get_buf_element(Buf b, size_t element)
 {
     /* Pointer can change after reallocation, so not safe to use after push. */
     if (element >= b->i)
-        debug(return NULL);     /* Out of bounds. */
+        debug(return NULL); /* Out of bounds. */
 
     return b->a + element * b->es;
 }

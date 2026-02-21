@@ -1,7 +1,7 @@
 #! /bin/sh
 
 #
-# Copyright (c) 2025 Logan Ryan McLintock. All rights reserved.
+# Copyright (c) 2025, 2026 Logan Ryan McLintock. All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without
 # modification, are permitted provided that the following conditions
@@ -25,49 +25,49 @@
 # SUCH DAMAGE.
 #
 
+# shellcheck disable=SC2086
+
 set -e
 set -u
 set -x
 
-
+######################################################################
 # Configuration.
+cc=clang
+# cc=gcc
 c_ops='-ansi -g -O0 -Wall -Wextra -pedantic -I. -DDEBUG'
-indent_ops='-kr -nut -l79'
+######################################################################
 
-export c_ops
+if [ "$cc" = clang ]
+then
+    c_ops="-MJ cc.json -finput-charset=UTF-8 $c_ops"
+else
+    c_ops="-finput-charset=ascii $c_ops"
+fi
+
 
 wd=$(pwd)
-export wd
 
 build_dir=$(mktemp -d)
 error_file="$build_dir"/error_file
-export error_file
+
+export wd error_file
 
 
-typedefs=$(grep -r --exclude-dir='.git' -E typedef \
-    | grep -E -o '[a-zA-Z_]+;$' \
-    | sed -E 's/(.*);/-T \1/' \
-    | tr '\n' ' ' \
-    | sed -E 's/ +$//')
+cc_c() {
+    if [ "$cc" = clang ]
+    then
+        printf '[\n' > compile_commands.json
+    fi
 
-indent_ops="$indent_ops $typedefs"
-export indent_ops
+    "$cc" -c $c_ops "$1"
 
-
-build_c() {
-    # shellcheck disable=SC2086
-    find . -type f \( -name '*.h' -o -name '*.c' \) -exec sh -c '
-        set -e
-        set -u
-        set -x
-        fn="$1"
-        # shellcheck disable=SC2086
-        if ! cc -c $c_ops "$fn"
-        then
-            printf "%s: ERROR: cc failed: %s\n" "$0" "$fn" \
-                >> "$error_file"
-        fi
-    ' sh '{}' \;
+    if [ "$cc" = clang ]
+    then
+        cat cc.json >> compile_commands.json
+        printf ']\n' >> compile_commands.json
+        clang-tidy "$1"
+    fi
 }
 
 
@@ -95,7 +95,12 @@ fix_perms
 
 
 # Copy files to build directory.
-rsync -av --exclude '.git/' . "$build_dir"
+if [ "$(uname)" = Linux ]
+then
+    rsync -av --exclude '.git/' . "$build_dir"
+else
+    cpdup -I -x . "$build_dir"
+fi
 
 cd "$build_dir" || exit 1
 
@@ -124,10 +129,9 @@ find . -type f -name '*.h' -exec sh -c '
            exit 1
         fi
         head -n "$line_num" "$fn" > "$fn"~
-        # shellcheck disable=SC2086
-        if ! indent $indent_ops "$c_fn"
+        if ! clang-format -i -style=file "$c_fn"
         then
-            printf "%s: ERROR: indent failed: %s\n" "$0" "$c_fn" \
+            printf "%s: ERROR: clang-format failed: %s\n" "$0" "$c_fn" \
                 >> "$error_file"
         fi
         {
@@ -143,20 +147,15 @@ find . -type f -name '*.h' -exec sh -c '
 
 exit_if_error
 
-build_c
 
-exit_if_error
-
-# shellcheck disable=SC2086
 find . -type f \( -name '*.h' -o -name '*.c' \) -exec sh -c '
         set -e
         set -u
         set -x
         fn="$1"
-        # shellcheck disable=SC2086
-        if ! indent $indent_ops "$fn"
+        if ! clang-format -i -style=file "$fn"
         then
-            printf "%s: ERROR: indent failed: %s\n" "$0" "$fn" \
+            printf "%s: ERROR: clang-format failed: %s\n" "$0" "$fn" \
                 >> "$error_file"
         fi
     ' sh '{}' \;
@@ -166,35 +165,46 @@ exit_if_error
 # Clean up.
 find . -type f -name '*~' -delete
 
+
 # Check for long lines.
-if grep -r -I --exclude-dir='.git' -E '.{80}' >> "$error_file"
+find . -type f ! -path '*.git*' \
+    \( -name '*.c' \
+        -o -name '*.h' \
+        -o -name '*.md' \
+        -o -name '*.sh' \
+        -o -name '*.exp' \
+        -o -name '*.cmd' \
+    \) -exec grep -H -n -E '.{80}' '{}' \; >> "$error_file" 2>&1
+
+exit_if_error
+
+
+tmp=$(mktemp)
+
+find . -type f ! -path '*.git*' -name '*.c' > "$tmp"
+
+if [ "$(uname)" = Linux ] || [ "$cc" != gcc ]
 then
-    printf '%s: ERROR: Long lines.\n' "$0" >> "$error_file"
-    exit 1
+    find . -type f ! -path '*.git*' -name '*.h' >> "$tmp"
 fi
 
-exit_if_error
+while IFS='' read -r x
+do
+    printf 'Compiling: %s\n' "$x"
+    cc_c "$x"
+done < "$tmp"
 
-build_c
 
-exit_if_error
-
-# shellcheck disable=SC2086
-cc $c_ops test_buf.o buf.o int.o -o test/test_buf
-# shellcheck disable=SC2086
-cc $c_ops test_input.o input.o buf.o int.o -o test/test_input
-# shellcheck disable=SC2086
-cc $c_ops test_screen.o screen.o int.o -o test/test_screen
-# shellcheck disable=SC2086
-cc $c_ops test_gap_buf.o gap_buf.o screen.o input.o buf.o int.o \
+"$cc" $c_ops test_buf.o buf.o int.o -o test/test_buf
+"$cc" $c_ops test_input.o input.o buf.o int.o -o test/test_input
+"$cc" $c_ops test_screen.o screen.o int.o -o test/test_screen
+"$cc" $c_ops test_gap_buf.o gap_buf.o screen.o input.o buf.o int.o \
     -o test/test_gap_buf
 
-# shellcheck disable=SC2086
-cc $c_ops test_dll.o doubly_linked_list.o \
+"$cc" $c_ops test_dll.o doubly_linked_list.o \
     -o test/test_dll
 
-# shellcheck disable=SC2086
-cc $c_ops suco.o gap_buf.o screen.o input.o buf.o int.o -o suco
+"$cc" $c_ops suco.o gap_buf.o screen.o input.o buf.o int.o -o suco
 
 
 # Move source code back.

@@ -27,14 +27,12 @@
 #define _DEFAULT_SOURCE
 #endif
 
-
 #ifdef _WIN32
 #define WIN32_LEAN_AND_MEAN
 #include <Windows.h>
 #else
 #include <sys/ioctl.h>
 #endif
-
 
 #include <ctype.h>
 #include <stdio.h>
@@ -45,7 +43,6 @@
 #include "debug.h"
 #include "int.h"
 #include "screen.h"
-
 
 /* ANSI escape sequences: */
 #define es_clear()        printf("\x1B[2J")
@@ -60,14 +57,12 @@
  * Our y and x start from 0, so need to add 1 for the ANSI escape sequence.
  * This macro evaluates y and x multiple times.
  */
-#define es_move(sc, y, x) do { \
-    printf("\x1B[%" lu ";%" lu "H", (size_t) (y) + 1, (size_t) (x) + 1); \
-    (sc)->s_y = (y); \
-    (sc)->s_x = (x); \
-} while (0)
-
-
-
+#define es_move(sc, y, x)                                                     \
+    do {                                                                      \
+        printf("\x1B[%" lu ";%" lu "H", (size_t) (y) + 1, (size_t) (x) + 1);  \
+        (sc)->s_y = (y);                                                      \
+        (sc)->s_x = (x);                                                      \
+    } while (0)
 
 /*
  * y and x coordinates start from 0.
@@ -76,17 +71,17 @@
  */
 struct screen {
     int fd;
-    size_t h;                   /* Screen height. */
-    size_t w;                   /* Screen width. */
-    size_t area;                /* Screen area. */
-    size_t y;                   /* In memory cursor y coordinate. */
-    size_t x;                   /* In memory cursor x coordinate. */
-    size_t s_y;                 /* On displayed screen cursor y coordinate. */
-    size_t s_x;                 /* On displayed screen cursor x coordinate. */
-    int highlight;              /* Indicates if highlight mode is on. */
+    size_t h;      /* Screen height. */
+    size_t w;      /* Screen width. */
+    size_t area;   /* Screen area. */
+    size_t y;      /* In memory cursor y coordinate. */
+    size_t x;      /* In memory cursor x coordinate. */
+    size_t s_y;    /* On displayed screen cursor y coordinate. */
+    size_t s_x;    /* On displayed screen cursor x coordinate. */
+    int highlight; /* Indicates if highlight mode is on. */
 #ifdef _WIN32
     HANDLE console_handle;
-    int mode_backup;            /* Indicates if mode_orig has been saved. */
+    int mode_backup; /* Indicates if mode_orig has been saved. */
     /* Used to restore the original console settings. */
     DWORD mode_orig;
 #endif
@@ -94,7 +89,6 @@ struct screen {
     unsigned char *current_mem; /* Mirrors the displayed screen. */
     unsigned char *next_mem;    /* Used to prepare for the next display. */
 };
-
 
 static int hard_clear_display(Screen sc)
 {
@@ -108,7 +102,6 @@ static int hard_clear_display(Screen sc)
 
     return 0;
 }
-
 
 int clear_screen(Screen sc, int mode)
 {
@@ -180,7 +173,6 @@ int clear_screen(Screen sc, int mode)
     return 0;
 }
 
-
 int free_screen(Screen sc)
 {
     int r = 0;
@@ -202,7 +194,6 @@ int free_screen(Screen sc)
 
     return r;
 }
-
 
 Screen init_screen(void)
 {
@@ -246,32 +237,31 @@ Screen init_screen(void)
 
     return sc;
 
-  error:
+error:
     free_screen(sc);
     return NULL;
 }
 
+/*
+ * As only printable chars are added to the memory,
+ * bit 7 is used as a highlight indicator.
+ */
+#define add_ch(ch)                                                            \
+    do {                                                                      \
+        /* Non-first char out of bounds. */                                   \
+        if (sc->y >= y_origin + sub_h || sc->x >= x_origin + sub_w)           \
+            return 0;                                                         \
+                                                                              \
+        sc->next_mem[sc->y * sc->w + sc->x]                                   \
+            = sc->highlight ? (ch) | 1 << 7 : (ch);                           \
+        if (++sc->x == x_origin + sub_w) {                                    \
+            ++sc->y;                                                          \
+            sc->x = x_origin;                                                 \
+        }                                                                     \
+    } while (0)
 
-    /*
-     * As only printable chars are added to the memory,
-     * bit 7 is used as a highlight indicator.
-     */
-#define add_ch(ch) do {                                         \
-    /* Non-first char out of bounds. */                         \
-    if (sc->y >= y_origin + sub_h || sc->x >= x_origin + sub_w) \
-        return 0;                                               \
-                                                                \
-    sc->next_mem[sc->y * sc->w + sc->x]                         \
-        = sc->highlight ? (ch) | 1 << 7 : (ch);                 \
-    if (++sc->x == x_origin + sub_w) {                          \
-        ++sc->y;                                                \
-        sc->x = x_origin;                                       \
-    }                                                           \
-} while (0)
-
-
-int soft_clear_sub_screen(Screen sc, size_t y_origin, size_t x_origin,
-                          size_t sub_h, size_t sub_w)
+int soft_clear_sub_screen(
+    Screen sc, size_t y_origin, size_t x_origin, size_t sub_h, size_t sub_w)
 {
     size_t row_i;
 
@@ -285,9 +275,8 @@ int soft_clear_sub_screen(Screen sc, size_t y_origin, size_t x_origin,
     return 0;
 }
 
-
 int sub_screen_print_ch(Screen sc, size_t y_origin, size_t x_origin,
-                        size_t sub_h, size_t sub_w, char ch)
+    size_t sub_h, size_t sub_w, char ch)
 {
     /*
      * Some characters are displayed as multiple chars, such as tab.
@@ -311,13 +300,11 @@ int sub_screen_print_ch(Screen sc, size_t y_origin, size_t x_origin,
         add_ch(ch);
     } else if (ch == '\t') {
         j = TAB_SIZE;
-        while (j--)
-            add_ch(' ');
+        while (j--) add_ch(' ');
     } else if (ch == '\n') {
         /* Clear to the end of the line. */
         y_old = sc->y;
-        while (sc->y == y_old)
-            add_ch(' ');
+        while (sc->y == y_old) add_ch(' ');
     } else if (iscntrl(ch)) {
         add_ch('^');
         /* Toggle bit 6 (the lowest bit is bit 0). */
@@ -331,9 +318,8 @@ int sub_screen_print_ch(Screen sc, size_t y_origin, size_t x_origin,
 
 #undef add_ch
 
-
 int sub_screen_print_str(Screen sc, size_t y_origin, size_t x_origin,
-                         size_t sub_h, size_t sub_w, const char *str)
+    size_t sub_h, size_t sub_w, const char *str)
 {
     char ch;
 
@@ -347,24 +333,21 @@ int sub_screen_print_str(Screen sc, size_t y_origin, size_t x_origin,
     return 0;
 }
 
-
 int print_ch(Screen sc, char ch)
 {
     return sub_screen_print_ch(sc, 0, 0, sc->h, sc->w, ch);
 }
-
 
 int print_str(Screen sc, const char *str)
 {
     return sub_screen_print_str(sc, 0, 0, sc->h, sc->w, str);
 }
 
-
 int refresh_screen(Screen sc)
 {
-    size_t y, x;                /* In memory. */
+    size_t y, x; /* In memory. */
     size_t i;
-    int s_rev = 0;              /* Displayed screen reverse setting is off. */
+    int s_rev = 0; /* Displayed screen reverse setting is off. */
     unsigned char u;
 
     es_hide_cursor();
@@ -428,47 +411,40 @@ int refresh_screen(Screen sc)
     return 0;
 }
 
-
 int move(Screen sc, size_t y, size_t x)
 {
     if (y >= sc->h || x >= sc->w)
-        debug(return 1);        /* Out of bounds. */
+        debug(return 1); /* Out of bounds. */
 
     sc->y = y;
     sc->x = x;
     return 0;
 }
 
-
 size_t get_screen_height(Screen sc)
 {
     return sc->h;
 }
-
 
 size_t get_screen_width(Screen sc)
 {
     return sc->w;
 }
 
-
 size_t get_y(Screen sc)
 {
     return sc->y;
 }
-
 
 size_t get_x(Screen sc)
 {
     return sc->x;
 }
 
-
 void highlight_on(Screen sc)
 {
     sc->highlight = 1;
 }
-
 
 void highlight_off(Screen sc)
 {

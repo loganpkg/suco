@@ -29,7 +29,6 @@
 #include "debug.h"
 #include "doubly_linked_list.h"
 
-
 int dll_add_node(Dlln *p, void *data)
 {
     Dlln n = NULL;
@@ -57,7 +56,6 @@ int dll_add_node(Dlln *p, void *data)
     return 0;
 }
 
-
 int free_dll_node(Dlln *p, Free_data_func fdf)
 {
     Dlln t = NULL;
@@ -82,13 +80,12 @@ int free_dll_node(Dlln *p, Free_data_func fdf)
         (*p)->next->prev = (*p)->prev;
     }
 
-    r = (*fdf) ((*p)->data);
+    r = (*fdf)((*p)->data);
 
     free(*p);
     *p = t;
     return r;
 }
-
 
 int free_dll(Dlln *p, Free_data_func fdf)
 {

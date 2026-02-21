@@ -28,9 +28,7 @@
 #include <debug.h>
 #include <gap_buf.h>
 
-
 #define INIT_NUM_ELEMENTS 10
-
 
 int main(void)
 {
@@ -133,7 +131,7 @@ int main(void)
     free_gap_buf(gb);
     return 0;
 
-  error:
+error:
     free_gap_buf(gb);
     debug(return 1);
 }

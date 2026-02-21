@@ -26,10 +26,8 @@
 #ifndef DOUBLY_LINKED_LIST_H
 #define DOUBLY_LINKED_LIST_H
 
-
 /* Doubly linked list node. */
 typedef struct dll_node *Dlln;
-
 
 struct dll_node {
     void *data;
@@ -37,9 +35,7 @@ struct dll_node {
     Dlln next;
 };
 
-
 typedef int (*Free_data_func)(void *);
-
 
 /* Function declarations */
 int dll_add_node(Dlln *p, void *data);

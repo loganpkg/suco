@@ -30,14 +30,12 @@
 #include <debug.h>
 #include <doubly_linked_list.h>
 
-
 void print_this_and_next_data(Dlln n)
 {
     printf("n->data: %s\n", n != NULL ? (char *) n->data : "NULL");
-    printf("n->next->data: %s\n\n", n != NULL
-           && n->next != NULL ? (char *) n->next->data : "NULL");
+    printf("n->next->data: %s\n\n",
+        n != NULL && n->next != NULL ? (char *) n->next->data : "NULL");
 }
-
 
 int add_node_with_str(Dlln *n, char *str)
 {
@@ -62,13 +60,11 @@ int add_node_with_str(Dlln *n, char *str)
     return 0;
 }
 
-
 int custom_free(void *data)
 {
     free(data);
     return 0;
 }
-
 
 int main(void)
 {
@@ -108,7 +104,7 @@ int main(void)
 
     return free_dll(&n, &custom_free);
 
-  error:
+error:
     free_dll(&n, &custom_free);
     debug(return 1);
 }

@@ -28,10 +28,8 @@
 #include <buf.h>
 #include <debug.h>
 
-
 #define INIT_NUM_ELEMENTS 1
-#define ELEMENT_SIZE 10
-
+#define ELEMENT_SIZE      10
 
 int main(void)
 {
@@ -68,7 +66,7 @@ int main(void)
     free_buf(b);
     return 0;
 
-  error:
+error:
     free_buf(b);
     debug(return 1);
 }

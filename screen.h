@@ -28,20 +28,16 @@
 
 #include <stddef.h>
 
-
 /* The size that these characters consume when displayed on the screen. */
-#define TAB_SIZE 8
+#define TAB_SIZE     8
 #define CTRL_CH_SIZE 2
-
 
 #define HARD_CLEAR 1
 #define SOFT_CLEAR 2
 
-
 typedef struct screen *Screen;
 
 extern int dummy;
-
 
 /* Function declarations */
 int clear_screen(Screen sc, int mode);
@@ -50,14 +46,14 @@ int free_screen(Screen sc);
 
 Screen init_screen(void);
 
-int soft_clear_sub_screen(Screen sc, size_t y_origin, size_t x_origin,
-                          size_t sub_h, size_t sub_w);
+int soft_clear_sub_screen(
+    Screen sc, size_t y_origin, size_t x_origin, size_t sub_h, size_t sub_w);
 
 int sub_screen_print_ch(Screen sc, size_t y_origin, size_t x_origin,
-                        size_t sub_h, size_t sub_w, char ch);
+    size_t sub_h, size_t sub_w, char ch);
 
 int sub_screen_print_str(Screen sc, size_t y_origin, size_t x_origin,
-                         size_t sub_h, size_t sub_w, const char *str);
+    size_t sub_h, size_t sub_w, const char *str);
 
 int print_ch(Screen sc, char ch);
 

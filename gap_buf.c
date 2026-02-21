@@ -39,19 +39,16 @@
 #include "input.h"
 #include "int.h"
 
-
 /* Operation type: */
-#define INSERT 1
-#define DELETE 2
+#define INSERT      1
+#define DELETE      2
 #define BEGIN_MULTI 4
-#define END_MULTI 8
-
+#define END_MULTI   8
 
 /* Mode: */
 #define NORMAL 1
-#define UNDO 2
-#define REDO 4
-
+#define UNDO   2
+#define REDO   4
 
 /*
  * When undoing, the undo buffer is used to replay (the opposite)
@@ -66,41 +63,38 @@
  */
 #define record_buf(gb) ((gb)->mode == UNDO ? (gb)->redo : (gb)->undo)
 
-
 struct operation {
     /* Copy of the g location. g does not change with realloc. */
     size_t g;
-    unsigned char type;         /* Type of operation. */
-    char ch;                    /* The inserted or deleted character. */
+    unsigned char type; /* Type of operation. */
+    char ch;            /* The inserted or deleted character. */
 };
 
-
-    /*
-     * The region is the text between the mark (inclusive) and the
-     * cursor (exclusive), or the cursor (inclusive) and the
-     * mark (exclusive), depending on which one comes first.
-     */
+/*
+ * The region is the text between the mark (inclusive) and the
+ * cursor (exclusive), or the cursor (inclusive) and the
+ * mark (exclusive), depending on which one comes first.
+ */
 
 struct gap_buf {
-    char *fn;                   /* Filename associated with the gap buffer. */
-    Buf undo;                   /* Undo stack. */
-    Buf redo;                   /* Redo stack. */
-    int mode;                   /* Mode: NORMAL, UNDO, REDO. */
-    char *a;                    /* Memory. */
-    size_t g;                   /* Start of gap. */
-    size_t c;                   /* Cursor. */
-    size_t e;                   /* End of gap buffer (included in memory). */
-    size_t m;                   /* Mark. This is a saved "g-value." */
-    int m_set;                  /* Indicates that the mark is set. */
-    size_t row;                 /* Cursor row. Starts from 1. */
-    size_t col;                 /* Cursor column. Starts from 0. */
-    size_t d;                   /* Draw start. This can be compared with g. */
-    int rc;                     /* Request centring. */
-    size_t mod;                 /* Modified indicator. */
-    char *sb;                   /* Status bar. */
-    size_t sb_s;                /* Status bar allocated size. */
+    char *fn;    /* Filename associated with the gap buffer. */
+    Buf undo;    /* Undo stack. */
+    Buf redo;    /* Redo stack. */
+    int mode;    /* Mode: NORMAL, UNDO, REDO. */
+    char *a;     /* Memory. */
+    size_t g;    /* Start of gap. */
+    size_t c;    /* Cursor. */
+    size_t e;    /* End of gap buffer (included in memory). */
+    size_t m;    /* Mark. This is a saved "g-value." */
+    int m_set;   /* Indicates that the mark is set. */
+    size_t row;  /* Cursor row. Starts from 1. */
+    size_t col;  /* Cursor column. Starts from 0. */
+    size_t d;    /* Draw start. This can be compared with g. */
+    int rc;      /* Request centring. */
+    size_t mod;  /* Modified indicator. */
+    char *sb;    /* Status bar. */
+    size_t sb_s; /* Status bar allocated size. */
 };
-
 
 void free_gap_buf(Gap_buf gb)
 {
@@ -113,7 +107,6 @@ void free_gap_buf(Gap_buf gb)
         free(gb);
     }
 }
-
 
 Gap_buf init_gap_buf(size_t init_num_elements)
 {
@@ -132,12 +125,12 @@ Gap_buf init_gap_buf(size_t init_num_elements)
     gb->a = NULL;
     gb->sb = NULL;
 
-    if ((gb->undo =
-         init_buf(init_num_elements, sizeof(struct operation))) == NULL)
+    if ((gb->undo = init_buf(init_num_elements, sizeof(struct operation)))
+        == NULL)
         debug(goto error);
 
-    if ((gb->redo =
-         init_buf(init_num_elements, sizeof(struct operation))) == NULL)
+    if ((gb->redo = init_buf(init_num_elements, sizeof(struct operation)))
+        == NULL)
         debug(goto error);
 
     gb->mode = NORMAL;
@@ -147,16 +140,15 @@ Gap_buf init_gap_buf(size_t init_num_elements)
 
     gb->c = init_num_elements - 1;
     gb->e = init_num_elements - 1;
-    *(gb->a + gb->e) = '~';     /* The end of buffer character. */
+    *(gb->a + gb->e) = '~'; /* The end of buffer character. */
     gb->row = 1;
 
     return gb;
 
-  error:
+error:
     free_gap_buf(gb);
     debug(return NULL);
 }
-
 
 int gb_insert_ch(Gap_buf gb, char ch)
 {
@@ -183,7 +175,7 @@ int gb_insert_ch(Gap_buf gb, char ch)
 
     if (gb->g == gb->c) {
         /* Need to grow the gap. */
-        s = gb->e + 1;          /* Cannot overflow, as already in memory. */
+        s = gb->e + 1; /* Cannot overflow, as already in memory. */
         if (mult_overflow(s, 2))
             debug(return 1);
 
@@ -201,7 +193,7 @@ int gb_insert_ch(Gap_buf gb, char ch)
     }
 
     /* Record the operation. */
-    op.g = gb->g;               /* Record g before it changes. */
+    op.g = gb->g; /* Record g before it changes. */
     op.type = INSERT;
     op.ch = ch;
 
@@ -232,7 +224,6 @@ int gb_insert_ch(Gap_buf gb, char ch)
 
     return 0;
 }
-
 
 int gb_delete_ch(Gap_buf gb)
 {
@@ -295,7 +286,6 @@ int gb_delete_ch(Gap_buf gb)
     return 0;
 }
 
-
 int gb_left_ch(Gap_buf gb)
 {
     /*
@@ -324,22 +314,20 @@ int gb_left_ch(Gap_buf gb)
     size_t i;
 
     if (!gb->g)
-        return 1;               /* At start of gap buffer. */
+        return 1; /* At start of gap buffer. */
 
     if ((*(gb->a + --gb->c) = *(gb->a + --gb->g)) == '\n') {
-        --gb->row;              /* Gone up a line. */
+        --gb->row; /* Gone up a line. */
 
         /* Need to recalculate the column number. */
         i = gb->g;
-        while (i && *(gb->a + --i) != '\n')
-            ++gb->col;
+        while (i && *(gb->a + --i) != '\n') ++gb->col;
     } else {
         --gb->col;
     }
 
     return 0;
 }
-
 
 int gb_right_ch(Gap_buf gb)
 {
@@ -367,7 +355,7 @@ int gb_right_ch(Gap_buf gb)
      */
 
     if (gb->c == gb->e)
-        return 1;               /* At end of the buffer. */
+        return 1; /* At end of the buffer. */
 
     if ((*(gb->a + gb->g++) = *(gb->a + gb->c++)) == '\n') {
         ++gb->row;
@@ -378,7 +366,6 @@ int gb_right_ch(Gap_buf gb)
 
     return 0;
 }
-
 
 static int record_multi(Gap_buf gb, unsigned char type)
 {
@@ -397,7 +384,6 @@ static int record_multi(Gap_buf gb, unsigned char type)
     return 0;
 }
 
-
 static int undo(Gap_buf gb, int mode)
 {
     struct operation op;
@@ -411,24 +397,24 @@ static int undo(Gap_buf gb, int mode)
     depth = 0;
     do {
         if (pop(replay_buf(gb), &op))
-            break;              /* No more. */
+            break; /* No more. */
 
         if (op.type == BEGIN_MULTI || op.type == END_MULTI) {
-            if (op.g || op.ch)  /* These should not be used. */
+            if (op.g || op.ch) /* These should not be used. */
                 debug(goto error);
         } else {
             /* Move into position. */
             while (gb->g < op.g)
                 if (gb_right_ch(gb))
-                    debug(goto error);  /* Should not fail. */
+                    debug(goto error); /* Should not fail. */
 
             while (gb->g > op.g)
                 if (gb_left_ch(gb))
-                    debug(goto error);  /* Should not fail. */
+                    debug(goto error); /* Should not fail. */
 
             /* Check. */
             if (gb->g != op.g)
-                debug(goto error);      /* Should not fail. */
+                debug(goto error); /* Should not fail. */
         }
 
         /* Perform the opposite operation. */
@@ -456,30 +442,27 @@ static int undo(Gap_buf gb, int mode)
 
             break;
         default:
-            debug(goto error);  /* Invalid operation type. */
+            debug(goto error); /* Invalid operation type. */
         }
     } while (depth);
 
     gb->mode = NORMAL;
     return 0;
 
-  error:
+error:
     gb->mode = NORMAL;
     debug(return 1);
 }
-
 
 int gb_undo(Gap_buf gb)
 {
     return undo(gb, UNDO);
 }
 
-
 int gb_redo(Gap_buf gb)
 {
     return undo(gb, REDO);
 }
-
 
 void gb_debug_print(Gap_buf gb)
 {
@@ -487,20 +470,16 @@ void gb_debug_print(Gap_buf gb)
     size_t i;
 
     /* Before gap. */
-    for (i = 0; i < gb->g; ++i)
-        putchar(*(gb->a + i));
+    for (i = 0; i < gb->g; ++i) putchar(*(gb->a + i));
 
     /* In gap. */
-    for (i = gb->g; i < gb->c; ++i)
-        putchar('X');
+    for (i = gb->g; i < gb->c; ++i) putchar('X');
 
     /* After gap. */
-    for (i = gb->c; i <= gb->e; ++i)
-        putchar(*(gb->a + i));
+    for (i = gb->c; i <= gb->e; ++i) putchar(*(gb->a + i));
 
     putchar('\n');
 }
-
 
 int gb_insert_file(Gap_buf gb, const char *fn)
 {
@@ -529,11 +508,10 @@ int gb_insert_file(Gap_buf gb, const char *fn)
 
     return free_input(ip);
 
-  error:
+error:
     free_input(ip);
     return 1;
 }
-
 
 int gb_set_fn(Gap_buf gb, const char *fn)
 {
@@ -560,14 +538,12 @@ int gb_set_fn(Gap_buf gb, const char *fn)
     return 0;
 }
 
-
 void gb_start_of_line(Gap_buf gb)
 {
     while (gb->g && *(gb->a + gb->g - 1) != '\n')
         if (gb_left_ch(gb))
             break;
 }
-
 
 void gb_end_of_line(Gap_buf gb)
 {
@@ -576,18 +552,15 @@ void gb_end_of_line(Gap_buf gb)
             break;
 }
 
-
 void gb_start_of_buffer(Gap_buf gb)
 {
     while (!gb_left_ch(gb));
 }
 
-
 void gb_end_of_buffer(Gap_buf gb)
 {
     while (!gb_right_ch(gb));
 }
-
 
 void gb_set_mark(Gap_buf gb)
 {
@@ -595,37 +568,35 @@ void gb_set_mark(Gap_buf gb)
     gb->m_set = 1;
 }
 
-
 void gb_request_centring(Gap_buf gb)
 {
     gb->rc = 1;
 }
 
-
-#define check() do {                                            \
-    ++x;                                                        \
-    if (ch == '\n' || x == sub_w ) {                            \
-        ++y;                                                    \
-        x = 0;                                                  \
-    }                                                           \
-    if (!d_centre_set && y == sub_h / 2 + 1) {                  \
-        /*                                                      \
-         * Save d_centre for later.                             \
-         * Plus 1 to move back in bounds.                       \
-         * Prevents mult-position chars from being half-off.    \
-         */                                                     \
-        d_centre = i + 1;                                       \
-        d_centre_set = 1;                                       \
-        if (gb->rc) /* Stop early. */                           \
-             goto end;                                          \
-    }                                                           \
-    if (y == sub_h) {                                           \
-        /* Off sub-screen. */                                   \
-        ++i;                                                    \
-        goto end;                                               \
-    }                                                           \
-} while (0)
-
+#define check()                                                               \
+    do {                                                                      \
+        ++x;                                                                  \
+        if (ch == '\n' || x == sub_w) {                                       \
+            ++y;                                                              \
+            x = 0;                                                            \
+        }                                                                     \
+        if (!d_centre_set && y == sub_h / 2 + 1) {                            \
+            /*                                                                \
+             * Save d_centre for later.                                       \
+             * Plus 1 to move back in bounds.                                 \
+             * Prevents mult-position chars from being half-off.              \
+             */                                                               \
+            d_centre = i + 1;                                                 \
+            d_centre_set = 1;                                                 \
+            if (gb->rc) /* Stop early. */                                     \
+                goto end;                                                     \
+        }                                                                     \
+        if (y == sub_h) {                                                     \
+            /* Off sub-screen. */                                             \
+            ++i;                                                              \
+            goto end;                                                         \
+        }                                                                     \
+    } while (0)
 
 static int gb_centre(Gap_buf gb, size_t sub_h, size_t sub_w)
 {
@@ -675,11 +646,9 @@ static int gb_centre(Gap_buf gb, size_t sub_h, size_t sub_w)
              * A long character, like a tab, can wrap multiple times when
              * the screen is narrow. So need to check after each char.
              */
-            for (j = 0; j < TAB_SIZE; ++j)
-                check();
+            for (j = 0; j < TAB_SIZE; ++j) check();
         } else if (iscntrl(ch)) {
-            for (j = 0; j < CTRL_CH_SIZE; ++j)
-                check();
+            for (j = 0; j < CTRL_CH_SIZE; ++j) check();
         } else {
             check();
         }
@@ -690,14 +659,14 @@ static int gb_centre(Gap_buf gb, size_t sub_h, size_t sub_w)
         --i;
     }
 
-  end:
+end:
 
     if (gb->rc || gb->d < i) {
         /* Would be off screen, so centre. */
         if (d_centre_set)
             gb->d = d_centre;
         else
-            gb->d = i;          /* Not enough text to reach the centre. */
+            gb->d = i; /* Not enough text to reach the centre. */
 
         gb->rc = 0;
         return 0;
@@ -709,10 +678,9 @@ static int gb_centre(Gap_buf gb, size_t sub_h, size_t sub_w)
 
 #undef check
 
-
 int gb_print(Gap_buf gb, Screen sc, size_t y_origin, size_t x_origin,
-             size_t sub_h, size_t sub_w, int sb_option, size_t *cursor_y,
-             size_t *cursor_x)
+    size_t sub_h, size_t sub_w, int sb_option, size_t *cursor_y,
+    size_t *cursor_x)
 {
     char *t;
     size_t h, w, text_h, i, y, x;
@@ -753,16 +721,16 @@ int gb_print(Gap_buf gb, Screen sc, size_t y_origin, size_t x_origin,
     if (gb->m_set && gb->m < gb->g) {
         /* Before the region. */
         for (; i < gb->m; ++i)
-            if (sub_screen_print_ch(sc, y_origin, x_origin, text_h, sub_w,
-                                    *(gb->a + i)))
+            if (sub_screen_print_ch(
+                    sc, y_origin, x_origin, text_h, sub_w, *(gb->a + i)))
                 debug(return 1);
 
         highlight_on(sc);
     }
 
     for (; i < gb->g; ++i)
-        if (sub_screen_print_ch(sc, y_origin, x_origin, text_h, sub_w,
-                                *(gb->a + i)))
+        if (sub_screen_print_ch(
+                sc, y_origin, x_origin, text_h, sub_w, *(gb->a + i)))
             debug(return 1);
 
     if (gb->m_set && gb->m < gb->g)
@@ -797,16 +765,16 @@ int gb_print(Gap_buf gb, Screen sc, size_t y_origin, size_t x_origin,
          * Failure is OK, as cursor has been printed.
          */
         for (; i < gb->c + (gb->m - gb->g); ++i)
-            sub_screen_print_ch(sc, y_origin, x_origin, text_h, sub_w,
-                                *(gb->a + i));
+            sub_screen_print_ch(
+                sc, y_origin, x_origin, text_h, sub_w, *(gb->a + i));
 
         highlight_off(sc);
     }
 
     /* Failure is OK. */
     for (; i <= gb->e; ++i)
-        sub_screen_print_ch(sc, y_origin, x_origin, text_h, sub_w,
-                            *(gb->a + i));
+        sub_screen_print_ch(
+            sc, y_origin, x_origin, text_h, sub_w, *(gb->a + i));
 
     if (add_overflow(sub_w, 1))
         debug(return 1);
@@ -823,8 +791,8 @@ int gb_print(Gap_buf gb, Screen sc, size_t y_origin, size_t x_origin,
     if (sb_option == INCLUDE_STATUS_BAR) {
         /* Prepare status bar. */
         snprintf(gb->sb, gb->sb_s, "%c %s (%" lu ", %" lu ")\n",
-                 gb->mod ? '*' : ' ', gb->fn == NULL ? "NULL" : gb->fn,
-                 gb->row, gb->col);
+            gb->mod ? '*' : ' ', gb->fn == NULL ? "NULL" : gb->fn, gb->row,
+            gb->col);
 
         if (move(sc, y_origin + text_h, x_origin))
             debug(return 1);
@@ -834,8 +802,8 @@ int gb_print(Gap_buf gb, Screen sc, size_t y_origin, size_t x_origin,
          * Do not check for error, as it is OK to truncate the display
          * of the status bar.
          */
-        sub_screen_print_str(sc, y_origin + sub_h - 1, x_origin, 1, sub_w,
-                             gb->sb);
+        sub_screen_print_str(
+            sc, y_origin + sub_h - 1, x_origin, 1, sub_w, gb->sb);
         highlight_off(sc);
     }
 
@@ -844,7 +812,6 @@ int gb_print(Gap_buf gb, Screen sc, size_t y_origin, size_t x_origin,
 
     return 0;
 }
-
 
 const char *gb_to_str(Gap_buf gb)
 {

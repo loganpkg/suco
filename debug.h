@@ -29,16 +29,18 @@
 /* Define on the command line. */
 #ifdef DEBUG
 
-#define debug(code) do { \
-    fprintf(stderr, "%s:%d: %s\n", __FILE__, __LINE__, #code); \
-    code; \
-} while (0)
+#define debug(code)                                                           \
+    do {                                                                      \
+        fprintf(stderr, "%s:%d: %s\n", __FILE__, __LINE__, #code);            \
+        code;                                                                 \
+    } while (0)
 
 #else
 
-#define debug(code) do { \
-    code; \
-} while (0)
+#define debug(code)                                                           \
+    do {                                                                      \
+        code;                                                                 \
+    } while (0)
 
 #endif
 

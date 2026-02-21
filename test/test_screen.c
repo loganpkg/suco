@@ -38,7 +38,6 @@
 
 #define ALPHABET_SIZE 26
 
-
 int print_alphabet(Screen sc, int mode, int increment)
 {
     unsigned char u;
@@ -49,8 +48,7 @@ int print_alphabet(Screen sc, int mode, int increment)
         if (clear_screen(sc, mode))
             debug(return 1);
 
-        for (j = 0; j <= i; j++)
-            print_ch(sc, u);
+        for (j = 0; j <= i; j++) print_ch(sc, u);
 
         if (refresh_screen(sc))
             debug(return 1);
@@ -62,7 +60,6 @@ int print_alphabet(Screen sc, int mode, int increment)
     }
     return 0;
 }
-
 
 int main(void)
 {
@@ -111,7 +108,7 @@ int main(void)
 
     return free_screen(sc);
 
-  error:
+error:
     free_screen(sc);
     debug(return 1);
 }

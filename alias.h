@@ -26,10 +26,9 @@
 #ifndef ALIAS_H
 #define ALIAS_H
 
-
 #ifdef _WIN32
-#define fileno _fileno
-#define isatty _isatty
+#define fileno     _fileno
+#define isatty     _isatty
 #define sleep(sec) Sleep((sec) * 1000)
 /* For size_t. */
 #define lu "zu"

@@ -23,8 +23,8 @@
  * SUCH DAMAGE.
  */
 
-#include <stdio.h>
 #include <stdint.h>
+#include <stdio.h>
 
 #include "debug.h"
 #include "int.h"
@@ -36,7 +36,6 @@ int mult_overflow(size_t a, size_t b)
 
     return 0;
 }
-
 
 int add_overflow(size_t a, size_t b)
 {
