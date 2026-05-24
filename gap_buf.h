@@ -54,9 +54,15 @@ int gb_redo(Gap_buf gb);
 
 void gb_debug_print(Gap_buf gb);
 
+int gb_backspace_ch(Gap_buf gb);
+
 int gb_insert_file(Gap_buf gb, const char *fn);
 
+void clear_mod(Gap_buf gb);
+
 int gb_set_fn(Gap_buf gb, const char *fn);
+
+int gb_write_file(Gap_buf gb);
 
 void gb_start_of_line(Gap_buf gb);
 

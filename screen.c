@@ -155,6 +155,11 @@ int clear_screen(Screen sc, int mode)
         sc->next_mem = t;
     }
 
+    if (sc->current_mem == NULL || sc->next_mem == NULL)
+        debug(return 1);
+
+    /* Only update area once memmory has been allocated. */
+
     sc->h = h;
     sc->w = w;
     sc->area = area;
@@ -167,6 +172,7 @@ int clear_screen(Screen sc, int mode)
     }
 
     memset(sc->next_mem, ' ', sc->area);
+
     sc->y = 0;
     sc->x = 0;
 

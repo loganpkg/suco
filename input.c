@@ -95,8 +95,8 @@ int free_input(Input ip)
     return r;
 }
 
-static Input init_input(FILE *fp, const char *fn, int blocking, int cooking,
-    const struct key_map *second_level_km)
+static int init_input(Input *y, FILE *fp, const char *fn, int blocking,
+    int cooking, const struct key_map *second_level_km)
 {
     /*
      * Since this function is not accessible, fp should be open for reading.
@@ -127,13 +127,21 @@ static Input init_input(FILE *fp, const char *fn, int blocking, int cooking,
     if (fp != NULL) {
         ip->fp = fp;
     } else {
+        errno = 0;
 #ifdef _WIN32
         if (fopen_s(&ip->fp, fn, "rb"))
-            debug(goto error);
 #else
         if ((ip->fp = fopen(fn, "rb")) == NULL)
-            debug(goto error);
 #endif
+        {
+            if (errno == ENOENT) {
+                free_input(ip);
+                return ENOENT;
+            }
+
+            debug(goto error);
+        }
+
         ip->binary = 1;
     }
 
@@ -229,23 +237,24 @@ static Input init_input(FILE *fp, const char *fn, int blocking, int cooking,
             == NULL)
         debug(goto error);
 
-    return ip;
+    *y = ip;
+    return 0;
 
 error:
     free_input(ip);
-    debug(return NULL);
+    debug(return -1);
 }
 
-Input init_input_stdin(
-    int blocking, int cooking, const struct key_map *second_level_km)
-{
-    return init_input(stdin, NULL, blocking, cooking, second_level_km);
-}
-
-Input init_input_fn(const char *fn, int blocking, int cooking,
+int init_input_stdin(Input *ip, int blocking, int cooking,
     const struct key_map *second_level_km)
 {
-    return init_input(NULL, fn, blocking, cooking, second_level_km);
+    return init_input(ip, stdin, NULL, blocking, cooking, second_level_km);
+}
+
+int init_input_fn(Input *ip, const char *fn, int blocking, int cooking,
+    const struct key_map *second_level_km)
+{
+    return init_input(ip, NULL, fn, blocking, cooking, second_level_km);
 }
 
 static int get_raw_ch(Input ip, int *ch)

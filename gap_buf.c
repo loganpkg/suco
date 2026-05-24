@@ -481,13 +481,21 @@ void gb_debug_print(Gap_buf gb)
     putchar('\n');
 }
 
+int gb_backspace_ch(Gap_buf gb)
+{
+    if (gb_left_ch(gb))
+        return 1;
+
+    return gb_delete_ch(gb);
+}
+
 int gb_insert_file(Gap_buf gb, const char *fn)
 {
     Input ip = NULL;
-    int ch;
+    int r, ch;
 
-    if ((ip = init_input_fn(fn, BLOCKING, RAW, NULL)) == NULL)
-        debug(goto error);
+    if ((r = init_input_fn(&ip, fn, BLOCKING, RAW, NULL)))
+        return r;
 
     if (record_multi(gb, BEGIN_MULTI))
         debug(goto error);
@@ -510,7 +518,12 @@ int gb_insert_file(Gap_buf gb, const char *fn)
 
 error:
     free_input(ip);
-    return 1;
+    return -1;
+}
+
+void clear_mod(Gap_buf gb)
+{
+    gb->mod = 0;
 }
 
 int gb_set_fn(Gap_buf gb, const char *fn)
@@ -536,6 +549,74 @@ int gb_set_fn(Gap_buf gb, const char *fn)
     gb->fn = t;
 
     return 0;
+}
+
+int gb_write_file(Gap_buf gb)
+{
+    size_t len;
+    char *tmp_fn = NULL;
+    FILE *fp = NULL;
+
+    if (!gb->mod)
+        return 0; /* Nothing to do. */
+
+    if (gb->fn == NULL || *gb->fn == '\0')
+        debug(goto error);
+
+    len = strlen(gb->fn);
+
+    if (add_overflow(len, 2))
+        debug(goto error);
+
+    if ((tmp_fn = calloc(len + 2, sizeof(char))) == NULL)
+        debug(goto error);
+
+    memcpy(tmp_fn, gb->fn, len);
+    tmp_fn[len] = '~';
+    tmp_fn[len + 1] = '\0';
+
+#ifdef _WIN32
+    if (fopen_s(&fp, tmp_fn, "wb"))
+#else
+    if ((fp = fopen(tmp_fn, "wb")) == NULL)
+#endif
+        debug(goto error);
+
+    /* Write before the gap. */
+    if (fwrite(gb->a, 1, gb->g, fp) != gb->g)
+        debug(goto error);
+
+    /* Write after the gap. */
+    if (fwrite(gb->a + gb->c, 1, gb->e - gb->c, fp) != gb->e - gb->c)
+        debug(goto error);
+
+    if (fclose(fp))
+        debug(goto error_no_fclose);
+
+    fp = NULL;
+
+#ifdef _WIN32
+    errno = 0;
+    if (_unlink(gb->fn)) {
+        if (errno != ENOENT)
+            debug(goto error);
+    }
+#endif
+
+    if (rename(tmp_fn, gb->fn))
+        debug(goto error);
+
+    free(tmp_fn);
+    gb->mod = 0;
+    return 0;
+
+error:
+    if (fp != NULL)
+        fclose(fp);
+error_no_fclose:
+    if (tmp_fn != NULL)
+        free(tmp_fn);
+    return 1;
 }
 
 void gb_start_of_line(Gap_buf gb)

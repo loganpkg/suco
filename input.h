@@ -47,6 +47,7 @@
 #define ESC 0x1B
 
 /* Control characters: */
+#define CTRL_2 0x00
 #define CTRL_A 0x01
 #define CTRL_B 0x02
 #define CTRL_C 0x03
@@ -117,10 +118,10 @@ typedef struct input *Input;
 /* Function declarations */
 int free_input(Input ip);
 
-Input init_input_stdin(
-    int blocking, int cooking, const struct key_map *second_level_km);
+int init_input_stdin(Input *ip, int blocking, int cooking,
+    const struct key_map *second_level_km);
 
-Input init_input_fn(const char *fn, int blocking, int cooking,
+int init_input_fn(Input *ip, const char *fn, int blocking, int cooking,
     const struct key_map *second_level_km);
 
 int get_ch(Input ip, int *ch);

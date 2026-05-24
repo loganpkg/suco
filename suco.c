@@ -132,7 +132,7 @@ Editor init_editor(const struct key_map *km)
     if ((ed->cl = init_gap_buf(INIT_NUM_GB_ELEMENTS)) == NULL)
         debug(goto error);
 
-    if ((ed->ip = init_input_stdin(BLOCKING, DOUBLE_COOKED, km)) == NULL)
+    if (init_input_stdin(&ed->ip, BLOCKING, DOUBLE_COOKED, km))
         debug(goto error);
 
     if ((ed->sc = init_screen()) == NULL)
@@ -155,8 +155,10 @@ int add_gap_buf(Editor ed, const char *fn)
         debug(goto error);
 
     if (fn != NULL) {
-        if (gb_insert_file(gb, fn))
+        if (gb_insert_file(gb, fn) == -1)
             debug(goto error);
+
+        clear_mod(gb);
 
         if (gb_set_fn(gb, fn))
             debug(goto error);
@@ -278,6 +280,11 @@ void ed_delete_ch(Editor ed)
     ed->rv = gb_delete_ch(a_gb);
 }
 
+void ed_backspace_ch(Editor ed)
+{
+    ed->rv = gb_backspace_ch(a_gb);
+}
+
 void ed_left_ch(Editor ed)
 {
     ed->rv = gb_left_ch(a_gb);
@@ -340,6 +347,12 @@ void ed_rename(Editor ed)
 {
     ed->cl_a = 1;
     ed->operation = ED_RENAME;
+}
+
+void ed_save(Editor ed)
+{
+    if (gb_write_file(a_gb))
+        debug(ed->rv = 1);
 }
 
 void process_cl_operation(Editor ed)
@@ -413,54 +426,12 @@ int main(int argc, char **argv)
     int i;
 
     const struct key_map km[] = {
-        { { CTRL_D }, ID },
-        { { KEY_DELETE }, ID },
-        { { CTRL_B }, ID },
-        { { KEY_LEFT }, ID },
-        { { CTRL_F }, ID },
-        { { KEY_RIGHT }, ID },
-        { { ESC, '-' }, ID },
-        { { ESC, '=' }, ID },
-        { { CTRL_A }, ID },
-        { { KEY_HOME }, ID },
-        { { CTRL_E }, ID },
-        { { KEY_END }, ID },
-        { { CTRL_X, CTRL_C }, ID },
-        { { CTRL_X, KEY_LEFT }, ID },
-        { { CTRL_LEFT }, ID },
-        { { CTRL_X, KEY_RIGHT }, ID },
-        { { CTRL_RIGHT }, ID },
-        { { 0 }, ID },
-        { { CTRL_L }, ID },
-        { { ESC, '/' }, ID },
-        { { ESC, 's' }, ID },
-        { { ESC, 'v' }, ID },
+#include ".key_sequence_records.txt"
         { { 0 }, 0 },
     };
 
     const Ed_func edf[] = {
-        &ed_delete_ch,
-        &ed_delete_ch,
-        &ed_left_ch,
-        &ed_left_ch,
-        &ed_right_ch,
-        &ed_right_ch,
-        &ed_undo,
-        &ed_redo,
-        &ed_start_of_line,
-        &ed_start_of_line,
-        &ed_end_of_line,
-        &ed_end_of_line,
-        &ed_close,
-        &ed_left_gb,
-        &ed_left_gb,
-        &ed_right_gb,
-        &ed_right_gb,
-        &ed_set_mark,
-        &ed_centre,
-        &ed_rename,
-        &ed_toggle_split,
-        &ed_toggle_view,
+#include ".key_func_pointer_records.txt"
     };
 
     if ((ed = init_editor(km)) == NULL)

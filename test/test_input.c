@@ -48,7 +48,7 @@ int main(void)
         { { 0 }, 0 },
     };
 
-    if ((ip = init_input_stdin(BLOCKING, RAW, NULL)) == NULL)
+    if (init_input_stdin(&ip, BLOCKING, RAW, NULL))
         return 1;
 
     while (1) {
@@ -87,8 +87,7 @@ int main(void)
             if (free_input(ip))
                 return 1;
 
-            if ((ip = init_input_stdin(NON_BLOCKING_TTY, COOKED, NULL))
-                == NULL)
+            if (init_input_stdin(&ip, NON_BLOCKING_TTY, COOKED, NULL))
                 return 1;
 
             non_blocking = 1;
@@ -96,8 +95,7 @@ int main(void)
             if (free_input(ip))
                 return 1;
 
-            if ((ip = init_input_stdin(NON_BLOCKING_TTY, DOUBLE_COOKED, km))
-                == NULL)
+            if (init_input_stdin(&ip, NON_BLOCKING_TTY, DOUBLE_COOKED, km))
                 return 1;
 
             non_blocking = 1;
