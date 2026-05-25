@@ -37,6 +37,10 @@
 
 #define INIT_NUM_GB_ELEMENTS 512
 
+/* The direction when changing buffers. */
+#define LEFT_GB  0
+#define RIGHT_GB 1
+
 /* This moves the command identifiers beyond the normal cooked key range. */
 #define CMD_ID_OFFSET 0x200
 
@@ -52,7 +56,9 @@
 #define HORIZONTAL_SPLIT 4
 
 /* Operation. 0 means no operation. */
-#define ED_RENAME 1
+#define ED_RENAME         1
+#define ED_OPEN_FILE      2
+#define ED_FORWARD_SEARCH 3
 
 /* Current gap buffer, excluding the cl. */
 #define c_gb (ed->view_2 ? ed->n_2->data : ed->n->data)
@@ -68,15 +74,16 @@
  * HARD_CLEAR is used when requested.
  */
 struct editor {
-    /* n and n_2 are nodes of a doubly linked list of gap buffers. */
+    /* n and n_2 are nodes of the same doubly linked list of gap buffers. */
     Dlln n;    /* Left or top view. */
     Dlln n_2;  /* Right or bottom view. Do not free. */
     int split; /* Split type. */
     int full_clear;
-    int view_2;    /* n_2 is in use (cl_a could be set too). */
-    Gap_buf cl;    /* Command line gap buffer. */
-    int cl_a;      /* Command line is active. */
-    int operation; /* The operation that using the cl. */
+    int view_2;     /* n_2 is in use (cl_a could be set too). */
+    Gap_buf cl;     /* Command line gap buffer. */
+    int cl_a;       /* Command line is active. */
+    Gap_buf search; /* Search gap buffer. */
+    int operation;  /* The operation that is using the cl. */
     Input ip;
     int ch; /* Read character. */
     Screen sc;
@@ -89,7 +96,7 @@ typedef void (*Ed_func)(Editor);
 
 int free_dll_node_data(void *data)
 {
-    free_gap_buf(data);
+    gb_free(data);
     return 0;
 }
 
@@ -101,7 +108,7 @@ int free_editor(Editor ed)
         if (free_dll(&ed->n, &free_dll_node_data))
             debug(r = 1);
 
-        free_gap_buf(ed->cl);
+        gb_free(ed->cl);
 
         if (free_input(ed->ip))
             debug(r = 1);
@@ -126,10 +133,14 @@ Editor init_editor(const struct key_map *km)
     ed->split = NO_SPLIT;
     ed->full_clear = SOFT_CLEAR;
     ed->cl = NULL;
+    ed->search = NULL;
     ed->ip = NULL;
     ed->sc = NULL;
 
-    if ((ed->cl = init_gap_buf(INIT_NUM_GB_ELEMENTS)) == NULL)
+    if ((ed->cl = gb_init(INIT_NUM_GB_ELEMENTS)) == NULL)
+        debug(goto error);
+
+    if ((ed->search = gb_init(INIT_NUM_GB_ELEMENTS)) == NULL)
         debug(goto error);
 
     if (init_input_stdin(&ed->ip, BLOCKING, DOUBLE_COOKED, km))
@@ -151,17 +162,17 @@ int add_gap_buf(Editor ed, const char *fn)
 {
     Gap_buf gb = NULL;
 
-    if ((gb = init_gap_buf(INIT_NUM_GB_ELEMENTS)) == NULL)
+    if ((gb = gb_init(INIT_NUM_GB_ELEMENTS)) == NULL)
         debug(goto error);
 
     if (fn != NULL) {
         if (gb_insert_file(gb, fn) == -1)
             debug(goto error);
 
-        clear_mod(gb);
-
         if (gb_set_fn(gb, fn))
             debug(goto error);
+
+        clear_mod(gb);
     }
 
     if (dll_add_node(&ed->n, gb))
@@ -170,7 +181,7 @@ int add_gap_buf(Editor ed, const char *fn)
     return 0;
 
 error:
-    free_gap_buf(gb);
+    gb_free(gb);
     debug(return 1);
 }
 
@@ -186,7 +197,16 @@ int draw_screen(Editor ed)
     w = get_screen_width(ed->sc);
 
     /* Check the minimum screen height. */
-    if ((ed->split == HORIZONTAL_SPLIT && h < 5) || h < 3)
+    if (ed->split == HORIZONTAL_SPLIT) {
+        if (h < 5)
+            debug(return 1);
+    } else {
+        if (h < 3)
+            debug(return 1);
+    }
+
+    /* Check the minimum screen width. */
+    if (w < 1)
         debug(return 1);
 
     switch (ed->split) {
@@ -254,13 +274,23 @@ int draw_screen(Editor ed)
 
     if (ed->full_clear || ed->cl_a) {
         if (!ed->full_clear)
-            if (soft_clear_sub_screen(ed->sc, h - 1, 0, 1, w))
+            if (soft_clear_sub_screen(ed->sc, h - 1, 1, 1, w - 1))
                 debug(return 1);
 
-        if (gb_print(ed->cl, ed->sc, h - 1, 0, 1, w, EXCLUDE_STATUS_BAR, &cl_y,
-                &cl_x))
+        if (gb_print(ed->cl, ed->sc, h - 1, 1, 1, w - 1, EXCLUDE_STATUS_BAR,
+                &cl_y, &cl_x))
             debug(return 1);
     }
+
+    /* Display global last return value (shared across all buffers). */
+    if (move(ed->sc, h - 1, 0))
+        debug(return 1);
+
+    highlight_on(ed->sc);
+    if (print_ch(ed->sc, ed->rv ? '!' : ' '))
+        debug(return 1);
+
+    highlight_off(ed->sc);
 
     /* Position cursor on the display. */
     if (move(ed->sc, ed->cl_a ? cl_y : (ed->view_2 ? y_2 : y),
@@ -315,21 +345,19 @@ void ed_end_of_line(Editor ed)
     gb_end_of_line(a_gb);
 }
 
+void ed_start_of_buffer(Editor ed)
+{
+    gb_start_of_buffer(a_gb);
+}
+
+void ed_end_of_buffer(Editor ed)
+{
+    gb_end_of_buffer(a_gb);
+}
+
 void ed_close(Editor ed)
 {
     ed->running = 0;
-}
-
-void ed_left_gb(Editor ed)
-{
-    if (ed->n->prev != NULL)
-        ed->n = ed->n->prev;
-}
-
-void ed_right_gb(Editor ed)
-{
-    if (ed->n->next != NULL)
-        ed->n = ed->n->next;
 }
 
 void ed_set_mark(Editor ed)
@@ -343,38 +371,103 @@ void ed_centre(Editor ed)
     ed->full_clear = HARD_CLEAR; /* Complete redraw. */
 }
 
+void ed_save(Editor ed)
+{
+    ed->rv = gb_write_file(a_gb);
+}
+
+void ed_repeat_last_search(Editor ed)
+{
+    ed->rv = gb_forward_search(c_gb, ed->search);
+}
+
+/* ######################################################################## */
+/* ################## Commands that use the command line ################## */
+/* ######################################################################## */
+
 void ed_rename(Editor ed)
 {
+    /* Can only have one command line operation at a time. */
+    if (ed->operation) {
+        ed->rv = 1;
+        return;
+    }
+
+    gb_reset(ed->cl);
     ed->cl_a = 1;
     ed->operation = ED_RENAME;
 }
 
-void ed_save(Editor ed)
+void ed_open_file(Editor ed)
 {
-    if (gb_write_file(a_gb))
-        debug(ed->rv = 1);
+    if (ed->operation) {
+        ed->rv = 1;
+        return;
+    }
+
+    gb_reset(ed->cl);
+    ed->cl_a = 1;
+    ed->operation = ED_OPEN_FILE;
+}
+
+void ed_forward_search(Editor ed)
+{
+    if (ed->operation) {
+        ed->rv = 1;
+        return;
+    }
+
+    gb_reset(ed->cl);
+    ed->cl_a = 1;
+    ed->operation = ED_FORWARD_SEARCH;
 }
 
 void process_cl_operation(Editor ed)
 {
-    const char *cl_str;
+    const char *cl_str = NULL;
 
-    if ((cl_str = gb_to_str(ed->cl)) == NULL) {
-        debug(ed->rv = 1);
-        return;
-    }
+    if (ed->operation != ED_FORWARD_SEARCH)
+        if ((cl_str = gb_to_str(ed->cl)) == NULL) {
+            debug(ed->rv = 1);
+            return;
+        }
 
     switch (ed->operation) {
     case ED_RENAME:
         ed->rv = gb_set_fn(c_gb, cl_str);
         break;
+    case ED_OPEN_FILE:
+        ed->rv = add_gap_buf(ed, cl_str);
+        break;
+    case ED_FORWARD_SEARCH:
+        gb_reset(ed->search);
+        if (gb_insert_gb(ed->search, ed->cl)) {
+            debug(ed->rv = 1);
+            return;
+        }
+        ed->rv = gb_forward_search(c_gb, ed->search);
+        break;
     default:
         ed->rv = 1; /* Invalid operation. */
         return;
     }
+
     ed->operation = 0;
     ed->cl_a = 0;
 }
+
+void ed_clear_mark_or_esc_cmd(Editor ed)
+{
+    if (is_mark_set(a_gb)) {
+        clear_mark(a_gb);
+        return;
+    }
+
+    ed->operation = 0;
+    ed->cl_a = 0;
+}
+
+/* ######################################################################## */
 
 void ed_toggle_split(Editor ed)
 {
@@ -390,7 +483,7 @@ void ed_toggle_split(Editor ed)
              * so n_2 will be the next.
              */
             if (add_gap_buf(ed, NULL))
-                debug(ed->rv = 1);
+                ed->rv = 1;
 
             ed->n_2 = ed->n;
             ed->n = ed->n->next;
@@ -418,6 +511,43 @@ void ed_toggle_view(Editor ed)
         ed->view_2 = 0;
     else
         ed->view_2 = 1;
+}
+
+void change_gb(Editor ed, int direction)
+{
+    Dlln t, skip;
+
+    if (ed->view_2) {
+        t = ed->n_2;
+        skip = ed->n;
+    } else {
+        t = ed->n;
+        skip = ed->n_2;
+    }
+
+    while ((t = direction == LEFT_GB ? t->prev : t->next) != NULL)
+        if (t != skip) {
+            if (ed->view_2)
+                ed->n_2 = t;
+            else
+                ed->n = t;
+
+            ed->rv = 0;
+            return;
+        }
+
+    ed->rv = 1;
+    return;
+}
+
+void ed_left_gb(Editor ed)
+{
+    change_gb(ed, LEFT_GB);
+}
+
+void ed_right_gb(Editor ed)
+{
+    change_gb(ed, RIGHT_GB);
 }
 
 int main(int argc, char **argv)
@@ -453,7 +583,7 @@ int main(int argc, char **argv)
 
         /*
          * Clear the return value after being displayed.
-         * This is important, as some functions do not set rv.
+         * This is important, as some functions do not set or clear rv.
          */
         ed->rv = 0;
 

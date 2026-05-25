@@ -219,13 +219,13 @@ done < "$tmp"
 "$cc" $c_ops test_buf.o buf.o int.o -o test/test_buf
 "$cc" $c_ops test_input.o input.o buf.o int.o -o test/test_input
 "$cc" $c_ops test_screen.o screen.o int.o -o test/test_screen
-"$cc" $c_ops test_gap_buf.o gap_buf.o screen.o input.o buf.o int.o \
+"$cc" $c_ops test_gap_buf.o gap_buf.o memmem.o screen.o input.o buf.o int.o \
     -o test/test_gap_buf
 
 "$cc" $c_ops test_dll.o doubly_linked_list.o \
     -o test/test_dll
 
-"$cc" $c_ops suco.o gap_buf.o screen.o input.o buf.o int.o -o suco
+"$cc" $c_ops suco.o gap_buf.o memmem.o screen.o input.o buf.o int.o -o suco
 
 
 # Move source code back.

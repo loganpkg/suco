@@ -35,13 +35,13 @@ cl %c_ops% test_input.obj input.obj buf.obj int.obj ^
 cl %c_ops% test_screen.obj screen.obj int.obj ^
     /Fe.\test\test_screen.exe
 
-cl %c_ops% test_gap_buf.obj gap_buf.obj screen.obj input.obj buf.obj int.obj ^
-    /Fe.\test\test_gap_buf.exe
+cl %c_ops% test_gap_buf.obj gap_buf.obj memmem.obj screen.obj input.obj ^
+    buf.obj int.obj /Fe.\test\test_gap_buf.exe
 
 cl %c_ops% test_dll.obj doubly_linked_list.obj ^
     /Fe.\test\test_dll.exe
 
-cl %c_ops% suco.obj gap_buf.obj screen.obj input.obj buf.obj int.obj ^
-    /Fesuco.exe
+cl %c_ops% suco.obj gap_buf.obj memmem.obj screen.obj input.obj buf.obj ^
+    int.obj /Fesuco.exe
 
 del *.obj

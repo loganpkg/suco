@@ -38,6 +38,7 @@
 #include "gap_buf.h"
 #include "input.h"
 #include "int.h"
+#include "memmem.h"
 
 /* Operation type: */
 #define INSERT      1
@@ -96,7 +97,7 @@ struct gap_buf {
     size_t sb_s; /* Status bar allocated size. */
 };
 
-void free_gap_buf(Gap_buf gb)
+void gb_free(Gap_buf gb)
 {
     if (gb != NULL) {
         free(gb->fn);
@@ -108,7 +109,48 @@ void free_gap_buf(Gap_buf gb)
     }
 }
 
-Gap_buf init_gap_buf(size_t init_num_elements)
+void gb_reset(Gap_buf gb)
+{
+    /*
+     * Resets a buffer without freeing memmory allocations.
+     * The buffer name is preserved. History is lost and the buffer
+     * is marked as modified.
+     */
+    truncate_buf(gb->undo);
+    truncate_buf(gb->redo);
+    gb->mode = NORMAL;
+    gb->g = 0;
+    gb->c = gb->e;
+    gb->m = 0;
+    gb->m_set = 0;
+    gb->row = 1;
+    gb->col = 0;
+    gb->d = 0;
+    gb->rc = 0;
+    gb->mod = 1;
+    if (gb->sb != NULL)
+        *gb->sb = '\0';
+}
+
+int gb_insert_gb(Gap_buf target, Gap_buf source)
+{
+    /* Inserts source into target. */
+    size_t i;
+
+    /* Before gap. */
+    for (i = 0; i < source->g; ++i)
+        if (gb_insert_ch(target, *(source->a + i)))
+            debug(return 1);
+
+    /* After gap. */
+    for (i = source->c; i < source->e; ++i)
+        if (gb_insert_ch(target, *(source->a + i)))
+            debug(return 1);
+
+    return 0;
+}
+
+Gap_buf gb_init(size_t init_num_elements)
 {
     Gap_buf gb = NULL;
 
@@ -146,7 +188,7 @@ Gap_buf init_gap_buf(size_t init_num_elements)
     return gb;
 
 error:
-    free_gap_buf(gb);
+    gb_free(gb);
     debug(return NULL);
 }
 
@@ -521,6 +563,17 @@ error:
     return -1;
 }
 
+int is_mark_set(Gap_buf gb)
+{
+    return gb->m_set;
+}
+
+void clear_mark(Gap_buf gb)
+{
+    gb->m_set = 0;
+    gb->m = 0;
+}
+
 void clear_mod(Gap_buf gb)
 {
     gb->mod = 0;
@@ -547,6 +600,9 @@ int gb_set_fn(Gap_buf gb, const char *fn)
 
     memmove(t, fn, len + 1);
     gb->fn = t;
+
+    /* Set mod so that the buffer can be re-saved as a different filename. */
+    gb->mod = 1;
 
     return 0;
 }
@@ -641,6 +697,30 @@ void gb_start_of_buffer(Gap_buf gb)
 void gb_end_of_buffer(Gap_buf gb)
 {
     while (!gb_right_ch(gb));
+}
+
+int gb_forward_search(Gap_buf gb, Gap_buf search)
+{
+    /*
+     * Forward of the cursor, exact match search (case sensitive).
+     * Excludes a match at the current cursor position.
+     */
+    char *p;
+
+    if (gb->c == gb->e)
+        return 1; /* No match possible. */
+
+    gb_start_of_buffer(search);
+    if ((p = memmem(gb->a + gb->c + 1, gb->e - gb->c, search->a + search->c,
+             search->e - search->c))
+        == NULL)
+        return 1; /* No match found. */
+
+    while (gb->a + gb->c != p)
+        if (gb_right_ch(gb))
+            debug(return 1);
+
+    return 0;
 }
 
 void gb_set_mark(Gap_buf gb)
@@ -871,9 +951,9 @@ int gb_print(Gap_buf gb, Screen sc, size_t y_origin, size_t x_origin,
 
     if (sb_option == INCLUDE_STATUS_BAR) {
         /* Prepare status bar. */
-        snprintf(gb->sb, gb->sb_s, "%c %s (%" lu ", %" lu ")\n",
+        snprintf(gb->sb, gb->sb_s, "%c %s (%" lu ", %" lu ") %02X\n",
             gb->mod ? '*' : ' ', gb->fn == NULL ? "NULL" : gb->fn, gb->row,
-            gb->col);
+            gb->col, *(gb->a + gb->c));
 
         if (move(sc, y_origin + text_h, x_origin))
             debug(return 1);

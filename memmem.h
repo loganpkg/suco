@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025 Logan Ryan McLintock. All rights reserved.
+ * Copyright (c) 2026 Logan Ryan McLintock. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -23,73 +23,13 @@
  * SUCH DAMAGE.
  */
 
-#ifndef GAP_BUF_H
-#define GAP_BUF_H
+#ifndef MEMMEM_H
+#define MEMMEM_H
 
 #include <stddef.h>
 
-#include "screen.h"
-
-#define INCLUDE_STATUS_BAR 1
-#define EXCLUDE_STATUS_BAR 2
-
-typedef struct gap_buf *Gap_buf;
-
 /* Function declarations */
-void gb_free(Gap_buf gb);
-
-void gb_reset(Gap_buf gb);
-
-int gb_insert_gb(Gap_buf target, Gap_buf source);
-
-Gap_buf gb_init(size_t init_num_elements);
-
-int gb_insert_ch(Gap_buf gb, char ch);
-
-int gb_delete_ch(Gap_buf gb);
-
-int gb_left_ch(Gap_buf gb);
-
-int gb_right_ch(Gap_buf gb);
-
-int gb_undo(Gap_buf gb);
-
-int gb_redo(Gap_buf gb);
-
-void gb_debug_print(Gap_buf gb);
-
-int gb_backspace_ch(Gap_buf gb);
-
-int gb_insert_file(Gap_buf gb, const char *fn);
-
-int is_mark_set(Gap_buf gb);
-
-void clear_mark(Gap_buf gb);
-
-void clear_mod(Gap_buf gb);
-
-int gb_set_fn(Gap_buf gb, const char *fn);
-
-int gb_write_file(Gap_buf gb);
-
-void gb_start_of_line(Gap_buf gb);
-
-void gb_end_of_line(Gap_buf gb);
-
-void gb_start_of_buffer(Gap_buf gb);
-
-void gb_end_of_buffer(Gap_buf gb);
-
-int gb_forward_search(Gap_buf gb, Gap_buf search);
-
-void gb_set_mark(Gap_buf gb);
-
-void gb_request_centring(Gap_buf gb);
-
-int gb_print(Gap_buf gb, Screen sc, size_t y_origin, size_t x_origin,
-    size_t sub_h, size_t sub_w, int sb_option, size_t *cursor_y,
-    size_t *cursor_x);
-
-const char *gb_to_str(Gap_buf gb);
+void *memmem(
+    const void *big, size_t big_size, const void *small, size_t small_size);
 
 #endif

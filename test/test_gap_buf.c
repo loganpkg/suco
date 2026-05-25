@@ -34,7 +34,7 @@ int main(void)
 {
     Gap_buf gb;
 
-    if ((gb = init_gap_buf(INIT_NUM_ELEMENTS)) == NULL)
+    if ((gb = gb_init(INIT_NUM_ELEMENTS)) == NULL)
         debug(goto error);
 
     gb_debug_print(gb);
@@ -128,10 +128,10 @@ int main(void)
 
     gb_debug_print(gb);
 
-    free_gap_buf(gb);
+    gb_free(gb);
     return 0;
 
 error:
-    free_gap_buf(gb);
+    gb_free(gb);
     debug(return 1);
 }
