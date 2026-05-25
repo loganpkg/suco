@@ -83,6 +83,7 @@ struct editor {
     Gap_buf cl;     /* Command line gap buffer. */
     int cl_a;       /* Command line is active. */
     Gap_buf search; /* Search gap buffer. */
+    Gap_buf paste;  /* Paste gap buffer. */
     int operation;  /* The operation that is using the cl. */
     Input ip;
     int ch; /* Read character. */
@@ -109,6 +110,8 @@ int free_editor(Editor ed)
             debug(r = 1);
 
         gb_free(ed->cl);
+        gb_free(ed->search);
+        gb_free(ed->paste);
 
         if (free_input(ed->ip))
             debug(r = 1);
@@ -134,6 +137,7 @@ Editor init_editor(const struct key_map *km)
     ed->full_clear = SOFT_CLEAR;
     ed->cl = NULL;
     ed->search = NULL;
+    ed->paste = NULL;
     ed->ip = NULL;
     ed->sc = NULL;
 
@@ -141,6 +145,9 @@ Editor init_editor(const struct key_map *km)
         debug(goto error);
 
     if ((ed->search = gb_init(INIT_NUM_GB_ELEMENTS)) == NULL)
+        debug(goto error);
+
+    if ((ed->paste = gb_init(INIT_NUM_GB_ELEMENTS)) == NULL)
         debug(goto error);
 
     if (init_input_stdin(&ed->ip, BLOCKING, DOUBLE_COOKED, km))
@@ -172,7 +179,7 @@ int add_gap_buf(Editor ed, const char *fn)
         if (gb_set_fn(gb, fn))
             debug(goto error);
 
-        clear_mod(gb);
+        gb_clear_mod(gb);
     }
 
     if (dll_add_node(&ed->n, gb))
@@ -365,6 +372,31 @@ void ed_set_mark(Editor ed)
     gb_set_mark(a_gb);
 }
 
+void ed_copy_region(Editor ed)
+{
+    ed->rv = gb_copy_region(a_gb, ed->paste);
+}
+
+void ed_cut_region(Editor ed)
+{
+    ed->rv = gb_cut_region(a_gb, ed->paste);
+}
+
+void ed_cut_to_start_of_line(Editor ed)
+{
+    ed->rv = gb_cut_to_start_of_line(a_gb, ed->paste);
+}
+
+void ed_cut_to_end_of_line(Editor ed)
+{
+    ed->rv = gb_cut_to_end_of_line(a_gb, ed->paste);
+}
+
+void ed_paste(Editor ed)
+{
+    ed->rv = gb_insert_gb(a_gb, ed->paste);
+}
+
 void ed_centre(Editor ed)
 {
     gb_request_centring(a_gb);
@@ -458,8 +490,8 @@ void process_cl_operation(Editor ed)
 
 void ed_clear_mark_or_esc_cmd(Editor ed)
 {
-    if (is_mark_set(a_gb)) {
-        clear_mark(a_gb);
+    if (gb_is_mark_set(a_gb)) {
+        gb_clear_mark(a_gb);
         return;
     }
 

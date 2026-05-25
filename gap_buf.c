@@ -40,6 +40,10 @@
 #include "int.h"
 #include "memmem.h"
 
+/* Copy type. */
+#define COPY_REGION 0
+#define CUT_REGION  1
+
 /* Operation type: */
 #define INSERT      1
 #define DELETE      2
@@ -64,6 +68,12 @@
  */
 #define record_buf(gb) ((gb)->mode == UNDO ? (gb)->redo : (gb)->undo)
 
+#define clear_mark(gb)                                                        \
+    do {                                                                      \
+        (gb)->m_set = 0;                                                      \
+        (gb)->m = 0;                                                          \
+    } while (0)
+
 struct operation {
     /* Copy of the g location. g does not change with realloc. */
     size_t g;
@@ -75,6 +85,7 @@ struct operation {
  * The region is the text between the mark (inclusive) and the
  * cursor (exclusive), or the cursor (inclusive) and the
  * mark (exclusive), depending on which one comes first.
+ * The start is always inclusive and the end is always exclusive.
  */
 
 struct gap_buf {
@@ -121,8 +132,7 @@ void gb_reset(Gap_buf gb)
     gb->mode = NORMAL;
     gb->g = 0;
     gb->c = gb->e;
-    gb->m = 0;
-    gb->m_set = 0;
+    clear_mark(gb);
     gb->row = 1;
     gb->col = 0;
     gb->d = 0;
@@ -130,24 +140,6 @@ void gb_reset(Gap_buf gb)
     gb->mod = 1;
     if (gb->sb != NULL)
         *gb->sb = '\0';
-}
-
-int gb_insert_gb(Gap_buf target, Gap_buf source)
-{
-    /* Inserts source into target. */
-    size_t i;
-
-    /* Before gap. */
-    for (i = 0; i < source->g; ++i)
-        if (gb_insert_ch(target, *(source->a + i)))
-            debug(return 1);
-
-    /* After gap. */
-    for (i = source->c; i < source->e; ++i)
-        if (gb_insert_ch(target, *(source->a + i)))
-            debug(return 1);
-
-    return 0;
 }
 
 Gap_buf gb_init(size_t init_num_elements)
@@ -257,9 +249,7 @@ int gb_insert_ch(Gap_buf gb, char ch)
         ++gb->col;
     }
 
-    /* Clear the mark. */
-    gb->m_set = 0;
-    gb->m = 0;
+    clear_mark(gb);
 
     /* Set the modified indicator. */
     gb->mod = 1;
@@ -320,8 +310,7 @@ int gb_delete_ch(Gap_buf gb)
     /* Expand the gap to the right. */
     ++gb->c;
 
-    gb->m_set = 0;
-    gb->m = 0;
+    clear_mark(gb);
 
     gb->mod = 1;
 
@@ -563,20 +552,127 @@ error:
     return -1;
 }
 
-int is_mark_set(Gap_buf gb)
+int gb_insert_gb(Gap_buf target, Gap_buf source)
+{
+    /* Inserts source into target. */
+    size_t i;
+
+    if (record_multi(target, BEGIN_MULTI))
+        debug(return 1);
+
+    /* Before gap. */
+    for (i = 0; i < source->g; ++i)
+        if (gb_insert_ch(target, *(source->a + i)))
+            debug(return 1);
+
+    /* After gap. */
+    for (i = source->c; i < source->e; ++i)
+        if (gb_insert_ch(target, *(source->a + i)))
+            debug(return 1);
+
+    if (record_multi(target, END_MULTI))
+        debug(return 1);
+
+    return 0;
+}
+
+void gb_set_mark(Gap_buf gb)
+{
+    gb->m = gb->g;
+    gb->m_set = 1;
+}
+
+void gb_clear_mark(Gap_buf gb)
+{
+    clear_mark(gb);
+}
+
+int gb_is_mark_set(Gap_buf gb)
 {
     return gb->m_set;
 }
 
-void clear_mark(Gap_buf gb)
-{
-    gb->m_set = 0;
-    gb->m = 0;
-}
-
-void clear_mod(Gap_buf gb)
+void gb_clear_mod(Gap_buf gb)
 {
     gb->mod = 0;
+}
+
+static int gb_copy_or_cut_region(Gap_buf gb, Gap_buf paste, int type)
+{
+    size_t i_start; /* Index of the start of the region (inclusive). */
+    size_t i_end;   /* Index of the end of the region (exclusive). */
+    size_t region_size;
+    size_t i;
+
+    if (!gb->m_set)
+        return 1;
+
+    if (gb->m == gb->g)
+        return 0; /* Nothing to do, empty region. */
+
+    gb_reset(paste);
+
+    if (gb->m < gb->g) {
+        /* Region: mark (inclusive) -> cursor (exclusive). */
+        i_start = gb->m;
+        i_end = gb->g;
+    } else {
+        /* Region: cursor (inclusive) -> mark (exclusive). */
+        i_start = gb->c;
+        i_end = gb->c + gb->m - gb->g;
+    }
+
+    region_size = i_end - i_start;
+
+    for (i = i_start; i < i_end; ++i)
+        if (gb_insert_ch(paste, *(gb->a + i)))
+            debug(return 1);
+
+    if (type == CUT_REGION) {
+        if (record_multi(gb, BEGIN_MULTI))
+            debug(return 1);
+
+        if (gb->m < gb->g) {
+            for (i = 0; i < region_size; ++i)
+                if (gb_backspace_ch(gb))
+                    debug(return 1);
+        } else {
+            for (i = 0; i < region_size; ++i)
+                if (gb_delete_ch(gb))
+                    debug(return 1);
+        }
+
+        if (record_multi(gb, END_MULTI))
+            debug(return 1);
+    } else {
+        clear_mark(gb);
+    }
+
+    return 0;
+}
+
+int gb_copy_region(Gap_buf gb, Gap_buf paste)
+{
+    return gb_copy_or_cut_region(gb, paste, COPY_REGION);
+}
+
+int gb_cut_region(Gap_buf gb, Gap_buf paste)
+{
+    return gb_copy_or_cut_region(gb, paste, CUT_REGION);
+}
+
+int gb_cut_to_start_of_line(Gap_buf gb, Gap_buf paste)
+{
+    gb_set_mark(gb);
+    gb_start_of_line(gb);
+    return gb_cut_region(gb, paste);
+}
+
+int gb_cut_to_end_of_line(Gap_buf gb, Gap_buf paste)
+{
+    gb_set_mark(gb);
+    gb_end_of_line(gb);
+    return gb_cut_region(gb, paste);
 }
 
 int gb_set_fn(Gap_buf gb, const char *fn)
@@ -721,12 +817,6 @@ int gb_forward_search(Gap_buf gb, Gap_buf search)
             debug(return 1);
 
     return 0;
-}
-
-void gb_set_mark(Gap_buf gb)
-{
-    gb->m = gb->g;
-    gb->m_set = 1;
 }
 
 void gb_request_centring(Gap_buf gb)

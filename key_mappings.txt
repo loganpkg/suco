@@ -57,6 +57,11 @@ ed_right_gb|CTRL_X KEY_RIGHT
 ed_right_gb|CTRL_RIGHT
 ed_set_mark|CTRL_2
 ed_clear_mark_or_esc_cmd|CTRL_G
+ed_copy_region|ESC w
+ed_cut_region|CTRL_W
+ed_cut_to_start_of_line|ESC k
+ed_cut_to_end_of_line|CTRL_K
+ed_paste|CTRL_Y
 ed_centre|CTRL_L
 ed_rename|ESC /
 ed_toggle_split|ESC s

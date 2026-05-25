@@ -1,6 +1,7 @@
 *.o
 *.obj
 *.exe
+*.core
 a.out
 suco
 test_*
