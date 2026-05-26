@@ -59,6 +59,7 @@
 #define ED_RENAME         1
 #define ED_OPEN_FILE      2
 #define ED_FORWARD_SEARCH 3
+#define ED_INSERT_HEX     4
 
 /* Current gap buffer, excluding the cl. */
 #define c_gb (ed->view_2 ? ed->n_2->data : ed->n->data)
@@ -362,6 +363,26 @@ void ed_end_of_buffer(Editor ed)
     gb_end_of_buffer(a_gb);
 }
 
+void ed_up_line(Editor ed)
+{
+    ed->rv = gb_up_line(a_gb);
+}
+
+void ed_down_line(Editor ed)
+{
+    ed->rv = gb_down_line(a_gb);
+}
+
+void ed_match_brace(Editor ed)
+{
+    ed->rv = gb_match_brace(a_gb);
+}
+
+void ed_trim_clean(Editor ed)
+{
+    ed->rv = gb_trim_clean(a_gb);
+}
+
 void ed_close(Editor ed)
 {
     ed->running = 0;
@@ -417,52 +438,47 @@ void ed_repeat_last_search(Editor ed)
 /* ################## Commands that use the command line ################## */
 /* ######################################################################## */
 
-void ed_rename(Editor ed)
+int prepare_cl(Editor ed, int operation)
 {
     /* Can only have one command line operation at a time. */
-    if (ed->operation) {
-        ed->rv = 1;
-        return;
-    }
+    if (ed->operation)
+        return 1;
 
     gb_reset(ed->cl);
     ed->cl_a = 1;
-    ed->operation = ED_RENAME;
+    ed->operation = operation;
+    return 0;
+}
+
+void ed_rename(Editor ed)
+{
+    ed->rv = prepare_cl(ed, ED_RENAME);
 }
 
 void ed_open_file(Editor ed)
 {
-    if (ed->operation) {
-        ed->rv = 1;
-        return;
-    }
-
-    gb_reset(ed->cl);
-    ed->cl_a = 1;
-    ed->operation = ED_OPEN_FILE;
+    ed->rv = prepare_cl(ed, ED_OPEN_FILE);
 }
 
 void ed_forward_search(Editor ed)
 {
-    if (ed->operation) {
-        ed->rv = 1;
-        return;
-    }
+    ed->rv = prepare_cl(ed, ED_FORWARD_SEARCH);
+}
 
-    gb_reset(ed->cl);
-    ed->cl_a = 1;
-    ed->operation = ED_FORWARD_SEARCH;
+void ed_insert_hex(Editor ed)
+{
+    ed->rv = prepare_cl(ed, ED_INSERT_HEX);
 }
 
 void process_cl_operation(Editor ed)
 {
     const char *cl_str = NULL;
 
+    ed->rv = 1; /* Default is failure. */
+
     if (ed->operation != ED_FORWARD_SEARCH)
-        if ((cl_str = gb_to_str(ed->cl)) == NULL) {
-            debug(ed->rv = 1);
-            return;
-        }
+        if ((cl_str = gb_to_str(ed->cl)) == NULL)
+            debug(goto end);
 
     switch (ed->operation) {
     case ED_RENAME:
@@ -473,17 +489,19 @@ void process_cl_operation(Editor ed)
         break;
     case ED_FORWARD_SEARCH:
         gb_reset(ed->search);
-        if (gb_insert_gb(ed->search, ed->cl)) {
-            debug(ed->rv = 1);
-            return;
-        }
+        if (gb_insert_gb(ed->search, ed->cl))
+            debug(break);
+
         ed->rv = gb_forward_search(c_gb, ed->search);
         break;
+    case ED_INSERT_HEX:
+        ed->rv = gb_insert_hex_str(c_gb, cl_str);
+        break;
     default:
-        ed->rv = 1; /* Invalid operation. */
-        return;
+        debug(break); /* Invalid operation. */
     }
 
+end:
     ed->operation = 0;
     ed->cl_a = 0;
 }

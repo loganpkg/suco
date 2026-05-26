@@ -109,26 +109,7 @@ find . -type f -name '*.sh' -exec sh -c \
 
 exit_if_error
 
-
-# Generate key mappings.
-tmp_km=$(mktemp)
-grep -E -v '^(#|$)' key_mappings.txt > "$tmp_km"
-
-rm -f .key_sequence_records.txt .key_func_pointer_records.txt
-
-while IFS='' read -r line
-do
-    c_func=$(printf %s "$line" | cut -d '|' -f 1)
-    key_str=$(printf %s "$line" | cut -d '|' -f 2-)
-
-    key_seq=$(printf %s "$key_str" \
-        | sed -E -e "s/(^| )([^ ])( |$)/\1'\2'\3/g" -e 's/ /, /g')
-
-    printf '        { { %s }, ID },\n' "$key_seq" >> .key_sequence_records.txt
-
-    printf '        &%s,\n' "$c_func" >> .key_func_pointer_records.txt
-done < "$tmp_km"
-
+./process_key_mappings.sh
 
 # Update header files.
 find . -type f -name '*.h' -exec sh -c '

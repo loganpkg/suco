@@ -54,21 +54,43 @@ int gb_undo(Gap_buf gb);
 
 int gb_redo(Gap_buf gb);
 
-void gb_debug_print(Gap_buf gb);
+void gb_start_of_line(Gap_buf gb);
+
+void gb_end_of_line(Gap_buf gb);
+
+void gb_start_of_buffer(Gap_buf gb);
+
+void gb_end_of_buffer(Gap_buf gb);
+
+int gb_up_line(Gap_buf gb);
+
+int gb_down_line(Gap_buf gb);
+
+int gb_forward_search(Gap_buf gb, Gap_buf search);
+
+int gb_match_brace(Gap_buf gb);
 
 int gb_backspace_ch(Gap_buf gb);
 
+int gb_insert_hex_str(Gap_buf gb, const char *hex_str);
+
+int gb_trim_clean(Gap_buf gb);
+
 int gb_insert_file(Gap_buf gb, const char *fn);
 
-int gb_insert_gb(Gap_buf target, Gap_buf source);
+const char *gb_to_str(Gap_buf gb);
+
+int gb_set_fn(Gap_buf gb, const char *fn);
+
+void gb_clear_mod(Gap_buf gb);
+
+int gb_write_file(Gap_buf gb);
 
 void gb_set_mark(Gap_buf gb);
 
 void gb_clear_mark(Gap_buf gb);
 
 int gb_is_mark_set(Gap_buf gb);
-
-void gb_clear_mod(Gap_buf gb);
 
 int gb_copy_region(Gap_buf gb, Gap_buf paste);
 
@@ -78,26 +100,14 @@ int gb_cut_to_start_of_line(Gap_buf gb, Gap_buf paste);
 
 int gb_cut_to_end_of_line(Gap_buf gb, Gap_buf paste);
 
-int gb_set_fn(Gap_buf gb, const char *fn);
+int gb_insert_gb(Gap_buf target, Gap_buf source);
 
-int gb_write_file(Gap_buf gb);
-
-void gb_start_of_line(Gap_buf gb);
-
-void gb_end_of_line(Gap_buf gb);
-
-void gb_start_of_buffer(Gap_buf gb);
-
-void gb_end_of_buffer(Gap_buf gb);
-
-int gb_forward_search(Gap_buf gb, Gap_buf search);
+void gb_debug_print(Gap_buf gb);
 
 void gb_request_centring(Gap_buf gb);
 
 int gb_print(Gap_buf gb, Screen sc, size_t y_origin, size_t x_origin,
     size_t sub_h, size_t sub_w, int sb_option, size_t *cursor_y,
     size_t *cursor_x);
-
-const char *gb_to_str(Gap_buf gb);
 
 #endif

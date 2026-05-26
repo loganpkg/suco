@@ -33,4 +33,6 @@ int mult_overflow(size_t a, size_t b);
 
 int add_overflow(size_t a, size_t b);
 
+int hex_digit_to_num(unsigned char *num, unsigned char hex_digit);
+
 #endif

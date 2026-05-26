@@ -74,6 +74,12 @@
         (gb)->m = 0;                                                          \
     } while (0)
 
+#define clear_sticky_column(gb)                                               \
+    do {                                                                      \
+        (gb)->sc_set = 0;                                                     \
+        (gb)->sc = 0;                                                         \
+    } while (0)
+
 struct operation {
     /* Copy of the g location. g does not change with realloc. */
     size_t g;
@@ -101,12 +107,18 @@ struct gap_buf {
     int m_set;   /* Indicates that the mark is set. */
     size_t row;  /* Cursor row. Starts from 1. */
     size_t col;  /* Cursor column. Starts from 0. */
+    size_t sc;   /* Sticky column. Used for repeared up or down. */
+    int sc_set;  /* Indicates that the sticky column is set. */
     size_t d;    /* Draw start. This can be compared with g. */
     int rc;      /* Request centring. */
     size_t mod;  /* Modified indicator. */
     char *sb;    /* Status bar. */
     size_t sb_s; /* Status bar allocated size. */
 };
+
+/* ######################################################################## */
+/* ################ Initialise, reset and free functions  ################# */
+/* ######################################################################## */
 
 void gb_free(Gap_buf gb)
 {
@@ -184,6 +196,12 @@ error:
     debug(return NULL);
 }
 
+/* ######################################################################## */
+
+/* ######################################################################## */
+/* ############### Fundamental operations on the gap buffer ############### */
+/* ######################################################################## */
+
 int gb_insert_ch(Gap_buf gb, char ch)
 {
     /*
@@ -206,6 +224,8 @@ int gb_insert_ch(Gap_buf gb, char ch)
     size_t s;
     char *t;
     struct operation op;
+
+    clear_sticky_column(gb);
 
     if (gb->g == gb->c) {
         /* Need to grow the gap. */
@@ -233,6 +253,8 @@ int gb_insert_ch(Gap_buf gb, char ch)
 
     if (push(record_buf(gb), &op))
         debug(return 1);
+
+    /* Cannot fail now. */
 
     /* Need to truncate the redo buffer when in normal mode. */
     if (gb->mode == NORMAL)
@@ -291,6 +313,8 @@ int gb_delete_ch(Gap_buf gb)
 
     struct operation op;
 
+    clear_sticky_column(gb);
+
     /* Cannot delete the last character in the gap buffer. */
     if (gb->c == gb->e)
         return 1;
@@ -302,6 +326,8 @@ int gb_delete_ch(Gap_buf gb)
     /* Record the operation. */
     if (push(record_buf(gb), &op))
         debug(return 1);
+
+    /* Cannot fail now. */
 
     /* Need to truncate the redo buffer when in normal mode. */
     if (gb->mode == NORMAL)
@@ -344,8 +370,12 @@ int gb_left_ch(Gap_buf gb)
 
     size_t i;
 
+    clear_sticky_column(gb);
+
     if (!gb->g)
         return 1; /* At start of gap buffer. */
+
+    /* Cannot fail now. */
 
     if ((*(gb->a + --gb->c) = *(gb->a + --gb->g)) == '\n') {
         --gb->row; /* Gone up a line. */
@@ -385,8 +415,12 @@ int gb_right_ch(Gap_buf gb)
      *
      */
 
+    clear_sticky_column(gb);
+
     if (gb->c == gb->e)
         return 1; /* At end of the buffer. */
+
+    /* Cannot fail now. */
 
     if ((*(gb->a + gb->g++) = *(gb->a + gb->c++)) == '\n') {
         ++gb->row;
@@ -397,6 +431,12 @@ int gb_right_ch(Gap_buf gb)
 
     return 0;
 }
+
+/* ######################################################################## */
+
+/* ######################################################################## */
+/* #################### Undo and redo related commands #################### */
+/* ######################################################################## */
 
 static int record_multi(Gap_buf gb, unsigned char type)
 {
@@ -495,22 +535,211 @@ int gb_redo(Gap_buf gb)
     return undo(gb, REDO);
 }
 
-void gb_debug_print(Gap_buf gb)
+/* ######################################################################## */
+
+/* ######################################################################## */
+/* ######################### Navigation commands ########################## */
+/* ######################################################################## */
+
+void gb_start_of_line(Gap_buf gb)
 {
-    /* Useful for debugging. */
-    size_t i;
-
-    /* Before gap. */
-    for (i = 0; i < gb->g; ++i) putchar(*(gb->a + i));
-
-    /* In gap. */
-    for (i = gb->g; i < gb->c; ++i) putchar('X');
-
-    /* After gap. */
-    for (i = gb->c; i <= gb->e; ++i) putchar(*(gb->a + i));
-
-    putchar('\n');
+    while (gb->g && *(gb->a + gb->g - 1) != '\n')
+        if (gb_left_ch(gb))
+            break;
 }
+
+void gb_end_of_line(Gap_buf gb)
+{
+    while (*(gb->a + gb->c) != '\n')
+        if (gb_right_ch(gb))
+            break;
+}
+
+void gb_start_of_buffer(Gap_buf gb)
+{
+    while (!gb_left_ch(gb));
+}
+
+void gb_end_of_buffer(Gap_buf gb)
+{
+    while (!gb_right_ch(gb));
+}
+
+int gb_up_line(Gap_buf gb)
+{
+    size_t row_orig, backup_sc;
+
+    row_orig = gb->row;
+
+    if (!gb->sc_set) {
+        gb->sc = gb->col;
+        gb->sc_set = 1;
+    }
+
+    backup_sc = gb->sc;
+
+    if (row_orig == 1)
+        return 1; /* On top line already. */
+
+    while (!gb_left_ch(gb))
+        if (gb->row == row_orig - 1 && gb->col <= backup_sc)
+            break;
+
+    /* Restore, as sticky column will be cleared by gb_left_ch function. */
+    gb->sc = backup_sc;
+    gb->sc_set = 1;
+
+    if (gb->row == row_orig - 1)
+        return 0; /* Moved up a line, so success. */
+
+    return 1;
+}
+
+int gb_down_line(Gap_buf gb)
+{
+    size_t row_orig, col_orig, backup_sc;
+
+    row_orig = gb->row;
+    col_orig = gb->col; /* To go back if on the last line. */
+
+    if (!gb->sc_set) {
+        gb->sc = gb->col;
+        gb->sc_set = 1;
+    }
+
+    backup_sc = gb->sc;
+
+    if (add_overflow(row_orig, 1))
+        debug(return 1);
+
+    while (!gb_right_ch(gb))
+        if (gb->row == row_orig + 1
+            && (gb->col == backup_sc || *(gb->a + gb->c) == '\n'))
+            break;
+
+    if (gb->row == row_orig)
+        while (gb->col != col_orig)
+            if (gb_left_ch(gb))
+                break;
+
+    /* Restore, as sticky column will be cleared by left and right functions.
+     */
+    gb->sc = backup_sc;
+    gb->sc_set = 1;
+
+    if (gb->row == row_orig + 1)
+        return 0; /* Moved down line, so success. */
+
+    return 1;
+}
+
+int gb_forward_search(Gap_buf gb, Gap_buf search)
+{
+    /*
+     * Forward of the cursor, exact match search (case sensitive).
+     * Excludes a match at the current cursor position.
+     */
+    char *p;
+
+    if (gb->c == gb->e)
+        return 1; /* No match possible. */
+
+    gb_start_of_buffer(search);
+    if ((p = memmem(gb->a + gb->c + 1, gb->e - gb->c, search->a + search->c,
+             search->e - search->c))
+        == NULL)
+        return 1; /* No match found. */
+
+    while (gb->a + gb->c != p)
+        if (gb_right_ch(gb))
+            debug(return 1);
+
+    return 0;
+}
+
+int gb_match_brace(Gap_buf gb)
+{
+    /* Moves to the matching brace that is under the cursor. */
+
+    int (*move)(Gap_buf);
+    int (*back)(Gap_buf);
+
+    char brace, target, ch;
+    size_t g_orig, depth;
+
+    brace = *(gb->a + gb->c);
+
+    switch (brace) {
+    case '<':
+        target = '>';
+        move = &gb_right_ch;
+        break;
+    case '(':
+        target = ')';
+        move = &gb_right_ch;
+        break;
+    case '{':
+        target = '}';
+        move = &gb_right_ch;
+        break;
+    case '[':
+        target = ']';
+        move = &gb_right_ch;
+        break;
+
+    case '>':
+        target = '<';
+        move = &gb_left_ch;
+        break;
+    case ')':
+        target = '(';
+        move = &gb_left_ch;
+        break;
+    case '}':
+        target = '{';
+        move = &gb_left_ch;
+        break;
+    case ']':
+        target = '[';
+        move = &gb_left_ch;
+        break;
+
+    default:
+        return 1; /* Not a brace style character. */
+    }
+
+    /* Backup starting position in case there is no match. */
+    g_orig = gb->g;
+
+    depth = 1; /* As already on a brace. */
+
+    while (!move(gb)) {
+        ch = *(gb->a + gb->c);
+        if (ch == brace)
+            ++depth;
+        else if (ch == target)
+            --depth;
+
+        if (!depth)
+            return 0; /* Success. */
+    }
+
+    /* Not found. Go back to starting location. */
+    if (move == &gb_right_ch)
+        back = &gb_left_ch;
+    else
+        back = &gb_right_ch;
+
+    while (gb->g != g_orig) back(gb);
+
+    return 1;
+}
+
+/* ######################################################################## */
+
+/* ######################################################################## */
+/* ####################### Miscellaneous commands  ######################## */
+/* ######################################################################## */
 
 int gb_backspace_ch(Gap_buf gb)
 {
@@ -520,6 +749,131 @@ int gb_backspace_ch(Gap_buf gb)
     return gb_delete_ch(gb);
 }
 
+int gb_insert_hex_str(Gap_buf gb, const char *hex_str)
+{
+    /*
+     * The 1 and 0 refers to the powers of 16, the hexadecimal places
+     * of the digits.
+     */
+    const unsigned char *p;
+    unsigned char h_1, h_0, num_1, num_0, x;
+
+    if (record_multi(gb, BEGIN_MULTI))
+        debug(return 1);
+
+    p = (unsigned char *) hex_str;
+
+    while ((h_1 = *p++)) {
+        /* Hex digit must be in pairs of two in order to represent bytes. */
+        if (!(h_0 = *p++))
+            goto error;
+
+        if (hex_digit_to_num(&num_1, h_1))
+            goto error;
+
+        if (hex_digit_to_num(&num_0, h_0))
+            goto error;
+
+        x = num_1 * 16 + num_0;
+
+        if (gb_insert_ch(gb, x))
+            goto error;
+    }
+
+    if (record_multi(gb, END_MULTI))
+        debug(return 1);
+
+    return 0;
+
+error:
+    if (record_multi(gb, END_MULTI))
+        debug(return 1);
+
+    /* Attempt undo. */
+    gb_undo(gb);
+    return 1;
+}
+
+int gb_trim_clean(Gap_buf gb)
+{
+    size_t g_orig;
+    int at_end_of_buffer, delete_nl, at_end_of_line;
+    char ch;
+
+    /* Record starting location. */
+    g_orig = gb->g;
+
+    gb_end_of_buffer(gb);
+
+    if (record_multi(gb, BEGIN_MULTI))
+        debug(return 1);
+
+    at_end_of_buffer = 1;
+    delete_nl = 0;
+    at_end_of_line = 0;
+
+    while (!gb_left_ch(gb)) {
+        ch = *(gb->a + gb->c);
+
+        if (isgraph(ch)) {
+            /* These characters are never deleted. */
+            at_end_of_buffer = 0;
+            at_end_of_line = 0;
+        } else if (ch == '\n') {
+            if (at_end_of_buffer) {
+                /* Trim excess new line characters from the end of the buffer.
+                 */
+                if (delete_nl) {
+                    if (gb_delete_ch(gb))
+                        debug(goto error);
+                } else {
+                    /*
+                     * Do not delete the first encountered new line
+                     * but delete all trailing ones after that.
+                     */
+                    delete_nl = 1;
+                }
+            }
+            at_end_of_line = 1;
+        } else if (ch == ' ' || ch == '\t') {
+            /* Trim trailing whitespace from the end of lines. */
+            if (at_end_of_line && gb_delete_ch(gb))
+                debug(goto error);
+        } else {
+            /* Clean: Delete all other characters. */
+            if (gb_delete_ch(gb))
+                debug(goto error);
+        }
+    }
+
+    if (record_multi(gb, END_MULTI))
+        debug(return 1);
+
+    /*
+     * Try to travel back to the same starting position,
+     * although it may not be possible due to the deletions.
+     */
+    while (!gb_right_ch(gb))
+        if (gb->g == g_orig)
+            break;
+
+    return 0;
+
+error:
+    if (record_multi(gb, END_MULTI))
+        debug(return 1);
+
+    /* Attempt undo. */
+    gb_undo(gb);
+    debug(return 1);
+}
+
+/* ######################################################################## */
+
+/* ######################################################################## */
+/* ######################## File related commands  ######################## */
+/* ######################################################################## */
+
 int gb_insert_file(Gap_buf gb, const char *fn)
 {
     Input ip = NULL;
@@ -528,8 +882,10 @@ int gb_insert_file(Gap_buf gb, const char *fn)
     if ((r = init_input_fn(&ip, fn, BLOCKING, RAW, NULL)))
         return r;
 
-    if (record_multi(gb, BEGIN_MULTI))
-        debug(goto error);
+    if (record_multi(gb, BEGIN_MULTI)) {
+        free_input(ip);
+        debug(return -1);
+    }
 
     while (1) {
         if (get_ch(ip, &ch))
@@ -542,137 +898,41 @@ int gb_insert_file(Gap_buf gb, const char *fn)
             debug(goto error);
     }
 
-    if (record_multi(gb, END_MULTI))
-        debug(goto error);
+    if (record_multi(gb, END_MULTI)) {
+        free_input(ip);
+        debug(return -1);
+    }
 
     return free_input(ip);
 
 error:
     free_input(ip);
-    return -1;
+
+    if (record_multi(gb, END_MULTI))
+        debug(return -1);
+
+    /* Attempt undo. */
+    gb_undo(gb);
+
+    debug(return -1);
 }
 
-int gb_insert_gb(Gap_buf target, Gap_buf source)
+const char *gb_to_str(Gap_buf gb)
 {
-    /* Inserts source into target. */
-    size_t i;
+    /* Only safe to use while the gap buffer is not changed. */
 
-    if (record_multi(target, BEGIN_MULTI))
-        debug(return 1);
+    gb_start_of_buffer(gb);
 
-    /* Before gap. */
-    for (i = 0; i < source->g; ++i)
-        if (gb_insert_ch(target, *(source->a + i)))
-            debug(return 1);
+    do {
+        if (*(gb->a + gb->c) == '\0')
+            if (gb_delete_ch(gb))
+                debug(return NULL);
+    } while (!gb_right_ch(gb));
 
-    /* After gap. */
-    for (i = source->c; i < source->e; ++i)
-        if (gb_insert_ch(target, *(source->a + i)))
-            debug(return 1);
+    if (gb_insert_ch(gb, '\0'))
+        debug(return NULL);
 
-    if (record_multi(target, END_MULTI))
-        debug(return 1);
-
-    return 0;
-}
-
-void gb_set_mark(Gap_buf gb)
-{
-    gb->m = gb->g;
-    gb->m_set = 1;
-}
-
-void gb_clear_mark(Gap_buf gb)
-{
-    clear_mark(gb);
-}
-
-int gb_is_mark_set(Gap_buf gb)
-{
-    return gb->m_set;
-}
-
-void gb_clear_mod(Gap_buf gb)
-{
-    gb->mod = 0;
-}
-
-static int gb_copy_or_cut_region(Gap_buf gb, Gap_buf paste, int type)
-{
-    size_t i_start; /* Index of the start of the region (inclusive). */
-    size_t i_end;   /* Index of the end of the region (exclusive). */
-    size_t region_size;
-    size_t i;
-
-    if (!gb->m_set)
-        return 1;
-
-    if (gb->m == gb->g)
-        return 0; /* Nothing to do, empty region. */
-
-    gb_reset(paste);
-
-    if (gb->m < gb->g) {
-        /* Region: mark (inclusive) -> cursor (exclusive). */
-        i_start = gb->m;
-        i_end = gb->g;
-    } else {
-        /* Region: cursor (inclusive) -> mark (exclusive). */
-        i_start = gb->c;
-        i_end = gb->c + gb->m - gb->g;
-    }
-
-    region_size = i_end - i_start;
-
-    for (i = i_start; i < i_end; ++i)
-        if (gb_insert_ch(paste, *(gb->a + i)))
-            debug(return 1);
-
-    if (type == CUT_REGION) {
-        if (record_multi(gb, BEGIN_MULTI))
-            debug(return 1);
-
-        if (gb->m < gb->g) {
-            for (i = 0; i < region_size; ++i)
-                if (gb_backspace_ch(gb))
-                    debug(return 1);
-        } else {
-            for (i = 0; i < region_size; ++i)
-                if (gb_delete_ch(gb))
-                    debug(return 1);
-        }
-
-        if (record_multi(gb, END_MULTI))
-            debug(return 1);
-    } else {
-        clear_mark(gb);
-    }
-
-    return 0;
-}
-
-int gb_copy_region(Gap_buf gb, Gap_buf paste)
-{
-    return gb_copy_or_cut_region(gb, paste, COPY_REGION);
-}
-
-int gb_cut_region(Gap_buf gb, Gap_buf paste)
-{
-    return gb_copy_or_cut_region(gb, paste, CUT_REGION);
-}
-
-int gb_cut_to_start_of_line(Gap_buf gb, Gap_buf paste)
-{
-    gb_set_mark(gb);
-    gb_start_of_line(gb);
-    return gb_cut_region(gb, paste);
-}
-
-int gb_cut_to_end_of_line(Gap_buf gb, Gap_buf paste)
-{
-    gb_set_mark(gb);
-    gb_end_of_line(gb);
-    return gb_cut_region(gb, paste);
+    return gb->a;
 }
 
 int gb_set_fn(Gap_buf gb, const char *fn)
@@ -701,6 +961,11 @@ int gb_set_fn(Gap_buf gb, const char *fn)
     gb->mod = 1;
 
     return 0;
+}
+
+void gb_clear_mod(Gap_buf gb)
+{
+    gb->mod = 0;
 }
 
 int gb_write_file(Gap_buf gb)
@@ -771,52 +1036,167 @@ error_no_fclose:
     return 1;
 }
 
-void gb_start_of_line(Gap_buf gb)
+/* ######################################################################## */
+
+/* ######################################################################## */
+/* ################ Copy, cut and paste related commands  ################# */
+/* ######################################################################## */
+
+void gb_set_mark(Gap_buf gb)
 {
-    while (gb->g && *(gb->a + gb->g - 1) != '\n')
-        if (gb_left_ch(gb))
-            break;
+    gb->m = gb->g;
+    gb->m_set = 1;
 }
 
-void gb_end_of_line(Gap_buf gb)
+void gb_clear_mark(Gap_buf gb)
 {
-    while (*(gb->a + gb->c) != '\n')
-        if (gb_right_ch(gb))
-            break;
+    clear_mark(gb);
 }
 
-void gb_start_of_buffer(Gap_buf gb)
+int gb_is_mark_set(Gap_buf gb)
 {
-    while (!gb_left_ch(gb));
+    return gb->m_set;
 }
 
-void gb_end_of_buffer(Gap_buf gb)
+static int gb_copy_or_cut_region(Gap_buf gb, Gap_buf paste, int type)
 {
-    while (!gb_right_ch(gb));
-}
+    size_t i_start; /* Index of the start of the region (inclusive). */
+    size_t i_end;   /* Index of the end of the region (exclusive). */
+    size_t region_size;
+    size_t i;
 
-int gb_forward_search(Gap_buf gb, Gap_buf search)
-{
-    /*
-     * Forward of the cursor, exact match search (case sensitive).
-     * Excludes a match at the current cursor position.
-     */
-    char *p;
+    if (!gb->m_set)
+        return 1;
 
-    if (gb->c == gb->e)
-        return 1; /* No match possible. */
+    if (gb->m == gb->g)
+        return 0; /* Nothing to do, empty region. */
 
-    gb_start_of_buffer(search);
-    if ((p = memmem(gb->a + gb->c + 1, gb->e - gb->c, search->a + search->c,
-             search->e - search->c))
-        == NULL)
-        return 1; /* No match found. */
+    gb_reset(paste);
 
-    while (gb->a + gb->c != p)
-        if (gb_right_ch(gb))
+    if (gb->m < gb->g) {
+        /* Region: mark (inclusive) -> cursor (exclusive). */
+        i_start = gb->m;
+        i_end = gb->g;
+    } else {
+        /* Region: cursor (inclusive) -> mark (exclusive). */
+        i_start = gb->c;
+        i_end = gb->c + gb->m - gb->g;
+    }
+
+    region_size = i_end - i_start;
+
+    for (i = i_start; i < i_end; ++i)
+        if (gb_insert_ch(paste, *(gb->a + i)))
             debug(return 1);
 
+    if (type == CUT_REGION) {
+        if (record_multi(gb, BEGIN_MULTI))
+            debug(return 1);
+
+        if (gb->m < gb->g) {
+            for (i = 0; i < region_size; ++i)
+                if (gb_backspace_ch(gb))
+                    debug(goto error);
+        } else {
+            for (i = 0; i < region_size; ++i)
+                if (gb_delete_ch(gb))
+                    debug(goto error);
+        }
+
+        if (record_multi(gb, END_MULTI))
+            debug(return 1);
+    } else {
+        clear_mark(gb);
+    }
+
     return 0;
+
+error:
+    if (record_multi(gb, END_MULTI))
+        debug(return 1);
+
+    /* Attempt undo. */
+    gb_undo(gb);
+    debug(return 1);
+}
+
+int gb_copy_region(Gap_buf gb, Gap_buf paste)
+{
+    return gb_copy_or_cut_region(gb, paste, COPY_REGION);
+}
+
+int gb_cut_region(Gap_buf gb, Gap_buf paste)
+{
+    return gb_copy_or_cut_region(gb, paste, CUT_REGION);
+}
+
+int gb_cut_to_start_of_line(Gap_buf gb, Gap_buf paste)
+{
+    gb_set_mark(gb);
+    gb_start_of_line(gb);
+    return gb_cut_region(gb, paste);
+}
+
+int gb_cut_to_end_of_line(Gap_buf gb, Gap_buf paste)
+{
+    gb_set_mark(gb);
+    gb_end_of_line(gb);
+    return gb_cut_region(gb, paste);
+}
+
+int gb_insert_gb(Gap_buf target, Gap_buf source)
+{
+    /* Inserts source into target. */
+    size_t i;
+
+    if (record_multi(target, BEGIN_MULTI))
+        debug(return 1);
+
+    /* Before gap. */
+    for (i = 0; i < source->g; ++i)
+        if (gb_insert_ch(target, *(source->a + i)))
+            debug(goto error);
+
+    /* After gap. */
+    for (i = source->c; i < source->e; ++i)
+        if (gb_insert_ch(target, *(source->a + i)))
+            debug(goto error);
+
+    if (record_multi(target, END_MULTI))
+        debug(return 1);
+
+    return 0;
+
+error:
+    if (record_multi(target, END_MULTI))
+        debug(return 1);
+
+    /* Attempt undo. */
+    gb_undo(target);
+    debug(return 1);
+}
+
+/* ######################################################################## */
+
+/* ######################################################################## */
+/* ###################### Graphics related commands ####################### */
+/* ######################################################################## */
+
+void gb_debug_print(Gap_buf gb)
+{
+    /* Useful for debugging. */
+    size_t i;
+
+    /* Before gap. */
+    for (i = 0; i < gb->g; ++i) putchar(*(gb->a + i));
+
+    /* In gap. */
+    for (i = gb->g; i < gb->c; ++i) putchar('X');
+
+    /* After gap. */
+    for (i = gb->c; i <= gb->e; ++i) putchar(*(gb->a + i));
+
+    putchar('\n');
 }
 
 void gb_request_centring(Gap_buf gb)
@@ -1064,20 +1444,4 @@ int gb_print(Gap_buf gb, Screen sc, size_t y_origin, size_t x_origin,
     return 0;
 }
 
-const char *gb_to_str(Gap_buf gb)
-{
-    /* Only safe to use while the gap buffer is not changed. */
-
-    gb_start_of_buffer(gb);
-
-    do {
-        if (*(gb->a + gb->c) == '\0')
-            if (gb_delete_ch(gb))
-                debug(return NULL);
-    } while (!gb_right_ch(gb));
-
-    if (gb_insert_ch(gb, '\0'))
-        debug(return NULL);
-
-    return gb->a;
-}
+/* ######################################################################## */

@@ -1,3 +1,5 @@
+#! /bin/sh
+
 #
 # Copyright (c) 2026 Logan Ryan McLintock. All rights reserved.
 #
@@ -23,53 +25,34 @@
 # SUCH DAMAGE.
 #
 
-# Key mappings for the suco text editor.
-# Only the first pipe character is the delimiter and pipe characters can be
-# safely used as a part of the key mapping after that. Single characters will
-# be treated as char literals. See the input.h file for a list of special key
-# macros. You can map the same function multiple times by simply making
-# another entry.
+# Process key mappings for suco.
 
-ed_delete_ch|CTRL_D
-ed_delete_ch|KEY_DELETE
-ed_backspace_ch|CTRL_H
-ed_backspace_ch|KEY_BACKSPACE
-ed_left_ch|CTRL_B
-ed_left_ch|KEY_LEFT
-ed_right_ch|CTRL_F
-ed_right_ch|KEY_RIGHT
-ed_up_line|CTRL_P
-ed_up_line|KEY_UP
-ed_down_line|CTRL_N
-ed_down_line|KEY_DOWN
-ed_undo|ESC -
-ed_redo|ESC =
-ed_start_of_line|CTRL_A
-ed_start_of_line|KEY_HOME
-ed_end_of_line|CTRL_E
-ed_end_of_line|KEY_END
-ed_start_of_buffer|ESC <
-ed_end_of_buffer|ESC >
-ed_match_brace|ESC m
-ed_forward_search|CTRL_S
-ed_repeat_last_search|ESC n
-ed_open_file|CTRL_X CTRL_F
-ed_save|CTRL_X CTRL_S
-ed_close|CTRL_X CTRL_C
-ed_left_gb|CTRL_X KEY_LEFT
-ed_left_gb|CTRL_LEFT
-ed_right_gb|CTRL_X KEY_RIGHT
-ed_right_gb|CTRL_RIGHT
-ed_set_mark|CTRL_2
-ed_clear_mark_or_esc_cmd|CTRL_G
-ed_copy_region|ESC w
-ed_cut_region|CTRL_W
-ed_cut_to_start_of_line|ESC k
-ed_cut_to_end_of_line|CTRL_K
-ed_paste|CTRL_Y
-ed_trim_clean|CTRL_T
-ed_insert_hex|CTRL_Q
-ed_centre|CTRL_L
-ed_rename|ESC /
-ed_toggle_split|ESC s
-ed_toggle_view|ESC v
+set -e
+set -u
+set -x
+
+tmp_km=$(mktemp)
+grep -E -v '^(#|$)' key_mappings.txt > "$tmp_km"
+
+rm -f .key_sequence_records.txt .key_func_pointer_records.txt
+
+tmp_md_table=$(mktemp)
+printf '| Suco function ^| Key sequence ^|
+| --- ^| --- ^|\n' > "$tmp_md_table"
+
+while IFS='' read -r line
+do
+    c_func=$(printf %s "$line" | cut -d '|' -f 1)
+    key_str=$(printf %s "$line" | cut -d '|' -f 2-)
+
+    key_seq=$(printf %s "$key_str" \
+        | sed -E -e "s/(^| )([^ ])( |$)/\1'\2'\3/g" -e 's/ /, /g')
+
+    printf '        { { %s }, ID },\n' "$key_seq" >> .key_sequence_records.txt
+
+    printf '        &%s,\n' "$c_func" >> .key_func_pointer_records.txt
+
+    printf '| %s ^| %s ^|\n' "$c_func" "$key_str" >> "$tmp_md_table"
+done < "$tmp_km"
+
+column -s '^' -t "$tmp_md_table" > .key_mappings_table.md

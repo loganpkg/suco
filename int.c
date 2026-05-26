@@ -23,6 +23,7 @@
  * SUCH DAMAGE.
  */
 
+#include <ctype.h>
 #include <stdint.h>
 #include <stdio.h>
 
@@ -41,6 +42,20 @@ int add_overflow(size_t a, size_t b)
 {
     if (a > SIZE_MAX - b)
         debug(return 1);
+
+    return 0;
+}
+
+int hex_digit_to_num(unsigned char *num, unsigned char hex_digit)
+{
+    if (isdigit(hex_digit))
+        *num = hex_digit - '0';
+    else if (isupper(hex_digit))
+        *num = hex_digit - 'A' + 10;
+    else if (islower(hex_digit))
+        *num = hex_digit - 'a' + 10;
+    else
+        return 1;
 
     return 0;
 }
