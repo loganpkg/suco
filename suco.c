@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025 Logan Ryan McLintock. All rights reserved.
+ * Copyright (c) 2025, 2026 Logan Ryan McLintock. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -58,8 +58,9 @@
 /* Operation. 0 means no operation. */
 #define ED_RENAME         1
 #define ED_OPEN_FILE      2
-#define ED_FORWARD_SEARCH 3
-#define ED_INSERT_HEX     4
+#define ED_INSERT_FILE    3
+#define ED_FORWARD_SEARCH 4
+#define ED_INSERT_HEX     5
 
 /* Current gap buffer, excluding the cl. */
 #define c_gb (ed->view_2 ? ed->n_2->data : ed->n->data)
@@ -96,13 +97,13 @@ struct editor {
 typedef struct editor *Editor;
 typedef void (*Ed_func)(Editor);
 
-int free_dll_node_data(void *data)
+static int free_dll_node_data(void *data)
 {
     gb_free(data);
     return 0;
 }
 
-int free_editor(Editor ed)
+static int free_editor(Editor ed)
 {
     int r = 0;
 
@@ -125,7 +126,7 @@ int free_editor(Editor ed)
     return r;
 }
 
-Editor init_editor(const struct key_map *km)
+static Editor init_editor(const struct key_map *km)
 {
     Editor ed = NULL;
 
@@ -166,7 +167,7 @@ error:
     debug(return NULL);
 }
 
-int add_gap_buf(Editor ed, const char *fn)
+static int add_gap_buf(Editor ed, const char *fn)
 {
     Gap_buf gb = NULL;
 
@@ -193,7 +194,7 @@ error:
     debug(return 1);
 }
 
-int draw_screen(Editor ed)
+static int draw_screen(Editor ed)
 {
     size_t h, w, y = 0, x = 0, y_2 = 0, x_2 = 0, cl_y = 0, cl_x = 0;
 
@@ -313,132 +314,132 @@ int draw_screen(Editor ed)
     return 0;
 }
 
-void ed_delete_ch(Editor ed)
+static void ed_delete_ch(Editor ed)
 {
     ed->rv = gb_delete_ch(a_gb);
 }
 
-void ed_backspace_ch(Editor ed)
+static void ed_backspace_ch(Editor ed)
 {
     ed->rv = gb_backspace_ch(a_gb);
 }
 
-void ed_left_ch(Editor ed)
+static void ed_left_ch(Editor ed)
 {
     ed->rv = gb_left_ch(a_gb);
 }
 
-void ed_right_ch(Editor ed)
+static void ed_right_ch(Editor ed)
 {
     ed->rv = gb_right_ch(a_gb);
 }
 
-void ed_undo(Editor ed)
+static void ed_undo(Editor ed)
 {
     ed->rv = gb_undo(a_gb);
 }
 
-void ed_redo(Editor ed)
+static void ed_redo(Editor ed)
 {
     ed->rv = gb_redo(a_gb);
 }
 
-void ed_start_of_line(Editor ed)
+static void ed_start_of_line(Editor ed)
 {
     gb_start_of_line(a_gb);
 }
 
-void ed_end_of_line(Editor ed)
+static void ed_end_of_line(Editor ed)
 {
     gb_end_of_line(a_gb);
 }
 
-void ed_start_of_buffer(Editor ed)
+static void ed_start_of_buffer(Editor ed)
 {
     gb_start_of_buffer(a_gb);
 }
 
-void ed_end_of_buffer(Editor ed)
+static void ed_end_of_buffer(Editor ed)
 {
     gb_end_of_buffer(a_gb);
 }
 
-void ed_up_line(Editor ed)
+static void ed_up_line(Editor ed)
 {
     ed->rv = gb_up_line(a_gb);
 }
 
-void ed_down_line(Editor ed)
+static void ed_down_line(Editor ed)
 {
     ed->rv = gb_down_line(a_gb);
 }
 
-void ed_match_brace(Editor ed)
+static void ed_match_brace(Editor ed)
 {
     ed->rv = gb_match_brace(a_gb);
 }
 
-void ed_trim_clean(Editor ed)
+static void ed_trim_clean(Editor ed)
 {
     ed->rv = gb_trim_clean(a_gb);
 }
 
-void ed_close(Editor ed)
+static void ed_close(Editor ed)
 {
     ed->running = 0;
 }
 
-void ed_set_mark(Editor ed)
+static void ed_set_mark(Editor ed)
 {
     gb_set_mark(a_gb);
 }
 
-void ed_copy_region(Editor ed)
+static void ed_copy_region(Editor ed)
 {
     ed->rv = gb_copy_region(a_gb, ed->paste);
 }
 
-void ed_cut_region(Editor ed)
+static void ed_cut_region(Editor ed)
 {
     ed->rv = gb_cut_region(a_gb, ed->paste);
 }
 
-void ed_cut_to_start_of_line(Editor ed)
+static void ed_cut_to_start_of_line(Editor ed)
 {
     ed->rv = gb_cut_to_start_of_line(a_gb, ed->paste);
 }
 
-void ed_cut_to_end_of_line(Editor ed)
+static void ed_cut_to_end_of_line(Editor ed)
 {
     ed->rv = gb_cut_to_end_of_line(a_gb, ed->paste);
 }
 
-void ed_paste(Editor ed)
+static void ed_paste(Editor ed)
 {
     ed->rv = gb_insert_gb(a_gb, ed->paste);
 }
 
-void ed_centre(Editor ed)
+static void ed_centre(Editor ed)
 {
     gb_request_centring(a_gb);
     ed->full_clear = HARD_CLEAR; /* Complete redraw. */
 }
 
-void ed_save(Editor ed)
+static void ed_save(Editor ed)
 {
     ed->rv = gb_write_file(a_gb);
 }
 
-void ed_repeat_last_search(Editor ed)
+static void ed_repeat_last_search(Editor ed)
 {
     ed->rv = gb_forward_search(c_gb, ed->search);
 }
 
 /* ######################################################################## */
-/* ################## Commands that use the command line ################## */
+/* #################### Command line related functions #################### */
 /* ######################################################################## */
 
-int prepare_cl(Editor ed, int operation)
+static int prepare_cl(Editor ed, int operation)
 {
     /* Can only have one command line operation at a time. */
     if (ed->operation)
@@ -450,27 +451,33 @@ int prepare_cl(Editor ed, int operation)
     return 0;
 }
 
-void ed_rename(Editor ed)
+static void ed_rename(Editor ed)
 {
     ed->rv = prepare_cl(ed, ED_RENAME);
 }
 
-void ed_open_file(Editor ed)
+static void ed_open_file(Editor ed)
 {
     ed->rv = prepare_cl(ed, ED_OPEN_FILE);
 }
 
-void ed_forward_search(Editor ed)
+static void ed_insert_file(Editor ed)
+{
+    /* Inserts a file at the cursor, not in a new buffer. */
+    ed->rv = prepare_cl(ed, ED_INSERT_FILE);
+}
+
+static void ed_forward_search(Editor ed)
 {
     ed->rv = prepare_cl(ed, ED_FORWARD_SEARCH);
 }
 
-void ed_insert_hex(Editor ed)
+static void ed_insert_hex(Editor ed)
 {
     ed->rv = prepare_cl(ed, ED_INSERT_HEX);
 }
 
-void process_cl_operation(Editor ed)
+static void process_cl_operation(Editor ed)
 {
     const char *cl_str = NULL;
 
@@ -486,6 +493,9 @@ void process_cl_operation(Editor ed)
         break;
     case ED_OPEN_FILE:
         ed->rv = add_gap_buf(ed, cl_str);
+        break;
+    case ED_INSERT_FILE:
+        ed->rv = gb_insert_file(c_gb, cl_str);
         break;
     case ED_FORWARD_SEARCH:
         gb_reset(ed->search);
@@ -506,7 +516,7 @@ end:
     ed->cl_a = 0;
 }
 
-void ed_clear_mark_or_esc_cmd(Editor ed)
+static void ed_clear_mark_or_esc_cmd(Editor ed)
 {
     if (gb_is_mark_set(a_gb)) {
         gb_clear_mark(a_gb);
@@ -519,7 +529,7 @@ void ed_clear_mark_or_esc_cmd(Editor ed)
 
 /* ######################################################################## */
 
-void ed_toggle_split(Editor ed)
+static void ed_toggle_split(Editor ed)
 {
     if (ed->split == NO_SPLIT) {
         if (ed->n->next != NULL) {
@@ -553,7 +563,7 @@ void ed_toggle_split(Editor ed)
     ed->full_clear = SOFT_CLEAR;
 }
 
-void ed_toggle_view(Editor ed)
+static void ed_toggle_view(Editor ed)
 {
     if (ed->n_2 == NULL)
         return;
@@ -563,7 +573,7 @@ void ed_toggle_view(Editor ed)
         ed->view_2 = 1;
 }
 
-void change_gb(Editor ed, int direction)
+static void change_gb(Editor ed, int direction)
 {
     Dlln t, skip;
 
@@ -590,12 +600,12 @@ void change_gb(Editor ed, int direction)
     return;
 }
 
-void ed_left_gb(Editor ed)
+static void ed_left_gb(Editor ed)
 {
     change_gb(ed, LEFT_GB);
 }
 
-void ed_right_gb(Editor ed)
+static void ed_right_gb(Editor ed)
 {
     change_gb(ed, RIGHT_GB);
 }

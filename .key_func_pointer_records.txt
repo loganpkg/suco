@@ -22,6 +22,7 @@
         &ed_forward_search,
         &ed_repeat_last_search,
         &ed_open_file,
+        &ed_insert_file,
         &ed_save,
         &ed_close,
         &ed_left_gb,

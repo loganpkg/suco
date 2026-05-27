@@ -22,6 +22,7 @@
         { { CTRL_S }, ID },
         { { ESC, 'n' }, ID },
         { { CTRL_X, CTRL_F }, ID },
+        { { CTRL_X, 'i' }, ID },
         { { CTRL_X, CTRL_S }, ID },
         { { CTRL_X, CTRL_C }, ID },
         { { CTRL_X, KEY_LEFT }, ID },
