@@ -1139,6 +1139,10 @@ int gb_cut_to_start_of_line(Gap_buf gb, Gap_buf paste)
 
 int gb_cut_to_end_of_line(Gap_buf gb, Gap_buf paste)
 {
+    /* Special case. If on a newline character then just delete it. */
+    if (*(gb->a + gb->c) == '\n')
+        return gb_delete_ch(gb);
+
     gb_set_mark(gb);
     gb_end_of_line(gb);
     return gb_cut_region(gb, paste);
